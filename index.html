@@ -45,9 +45,6 @@
     <!-- FontAwesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     
-    <!-- SheetJS Thư viện Xuất File Excel -->
-    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-
     <style>
         [x-cloak] { display: none !important; }
     </style>
@@ -65,6 +62,11 @@
                 <p class="text-indigo-200 text-sm mt-1">Hệ thống quản lý và đăng ký lịch trực ca</p>
             </div>
             <div class="p-8 space-y-5">
+                <template x-if="loginError">
+                    <div class="bg-rose-50 dark:bg-rose-900/30 text-rose-600 dark:text-rose-400 text-sm p-3 rounded-lg border border-rose-200 dark:border-rose-800 text-center font-medium" x-text="loginError"></div>
+                </template>
+
+                <!-- Form Quản trị / Nhân viên -->
                 <form @submit.prevent="handleAdminLogin" class="space-y-4">
                     <div>
                         <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Tài khoản</label>
@@ -84,14 +86,12 @@
 
     <!-- GIAO DIỆN CHÍNH -->
     <div x-show="isLoggedIn" class="min-h-screen flex flex-col" x-cloak>
-        <header class="bg-white dark:bg-gray-800 shadow-sm px-4 md:px-6 py-4 flex justify-between items-center border-b dark:border-gray-700 transition-colors">
+        <header class="bg-white dark:bg-gray-800 shadow-sm px-6 py-4 flex justify-between items-center border-b dark:border-gray-700 transition-colors">
             <div class="flex items-center gap-3">
-                <span class="text-lg md:text-xl font-bold text-gray-800 dark:text-white">
-                    <a href="https://hrm-system-indol-nu.vercel.app/" target="_blank" class="hover:text-indigo-600">HRM Smart Schedule</a>
-                </span>
-                <span class="text-xs px-2.5 py-1 rounded-full font-medium bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300">Admin</span>
+                <span class="text-xl font-bold text-gray-800 dark:text-white"><a href="https://hrm-system-indol-nu.vercel.app/" target="_blank" class="hover:text-indigo-600">HRM Smart Schedule</a></span>
+                <span class="text-xs px-2.5 py-1 rounded-full font-medium bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300">Quyền: Admin</span>
             </div>
-            <div class="flex items-center gap-3 md:gap-4 text-sm">
+            <div class="flex items-center gap-4 text-sm">
                 <button @click="toggleDarkMode()" class="w-9 h-9 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-700 dark:text-yellow-400 rounded-full flex items-center justify-center transition">
                     <i :class="darkMode ? 'fa-solid fa-sun' : 'fa-solid fa-moon'"></i>
                 </button>
@@ -99,10 +99,10 @@
             </div>
         </header>
 
-        <main class="p-3 md:p-6 max-w-full flex-1 space-y-4 md:space-y-6">
-            <!-- THANH THAO TÁC: THÊM, TÌM KIẾM, SAO CHÉP, XUẤT EXCEL -->
+        <main class="p-4 md:p-6 max-w-full flex-1 space-y-6">
+            <!-- THANH THÊM & TÌM KIẾM -->
             <div class="bg-white dark:bg-gray-800 p-4 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 flex flex-wrap gap-3 items-center justify-between">
-                <div class="flex flex-wrap items-center gap-3 w-full lg:w-auto">
+                <div class="flex flex-wrap items-center gap-3 w-full md:w-auto">
                     <div class="flex items-center gap-2 w-full sm:w-auto">
                         <input type="text" x-model="newEmpName" placeholder="Họ Tên nhân viên mới..." class="border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 flex-1 sm:w-52">
                         <button @click="addEmployee()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition flex items-center gap-2 shadow-sm whitespace-nowrap">
@@ -113,73 +113,18 @@
                         <input type="text" x-model="searchKeyword" placeholder="Tìm tên nhân viên..." class="border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 w-full sm:w-48">
                     </div>
                 </div>
-
-                <div class="flex items-center gap-2 flex-wrap w-full lg:w-auto justify-end">
-                    <button @click="copyPreviousWeekSchedule()" class="bg-teal-600 hover:bg-teal-700 text-white px-3 py-2 rounded-lg text-xs md:text-sm font-medium transition flex items-center gap-1.5 shadow-sm">
-                        <i class="fa-solid fa-copy"></i> Sao Chép Tuần Trước
-                    </button>
-                    <button @click="exportToExcel()" class="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-2 rounded-lg text-xs md:text-sm font-medium transition flex items-center gap-1.5 shadow-sm">
-                        <i class="fa-solid fa-file-excel"></i> Xuất Excel
-                    </button>
-                </div>
             </div>
 
-            <!-- 1. GIAO DIỆN MOBILE CARD VIEW (Hiển thị dạng Thẻ xếp dọc trên Điện thoại) -->
-            <div class="block md:hidden space-y-3">
-                <template x-for="emp in filteredEmployees" :key="emp.id">
-                    <div class="bg-white dark:bg-gray-800 rounded-xl p-4 shadow-sm border border-gray-200 dark:border-gray-700 space-y-3">
-                        <div class="flex justify-between items-center pb-2 border-b border-gray-100 dark:border-gray-700">
-                            <div class="flex items-center gap-2">
-                                <span class="font-bold text-gray-800 dark:text-white text-base" x-text="emp.name"></span>
-                                <button @click="deleteEmployee(emp.id, emp.name)" class="text-rose-400 hover:text-rose-600 p-1">
-                                    <i class="fa-solid fa-trash-can text-xs"></i>
-                                </button>
-                            </div>
-                            <span class="bg-indigo-50 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-300 text-xs font-bold px-2.5 py-1 rounded-full">
-                                Tổng: <span x-text="getEmployeeTotalShifts(emp.name)"></span> ca
-                            </span>
-                        </div>
-
-                        <!-- Danh sách ngày trong tuần -->
-                        <div class="grid grid-cols-1 gap-2 text-xs">
-                            <template x-for="(day, index) in weekDays" :key="index">
-                                <div class="flex items-center justify-between p-2 rounded-lg bg-gray-50 dark:bg-gray-700/40">
-                                    <div class="w-20">
-                                        <div class="font-bold text-gray-700 dark:text-gray-200" x-text="day.shortName"></div>
-                                        <div class="text-[10px] text-gray-400" x-text="day.dateStr"></div>
-                                    </div>
-                                    <div class="flex items-center gap-3">
-                                        <template x-for="shiftNum in [1, 2, 3]" :key="shiftNum">
-                                            <label class="flex items-center gap-1 cursor-pointer select-none">
-                                                <input type="checkbox" 
-                                                       :checked="hasShift(emp.name, day.dateKey, shiftNum)"
-                                                       @change="toggleShift(emp.name, day.dateKey, shiftNum)"
-                                                       class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 w-4 h-4">
-                                                <span class="text-gray-600 dark:text-gray-300 font-medium" x-text="`C${shiftNum}`"></span>
-                                            </label>
-                                        </template>
-                                    </div>
-                                </div>
-                            </template>
-                        </div>
-                    </div>
-                </template>
-            </div>
-
-            <!-- 2. GIAO DIỆN DESKTOP TABLE VIEW (Bảng chuẩn hiển thị trên Máy tính) -->
-            <div class="hidden md:block bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-x-auto">
+            <!-- BẢNG LỊCH TRỰC CHECKBOX CA 1, CA 2, CA 3 -->
+            <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-x-auto">
                 <table class="w-full text-left border-collapse">
                     <thead>
                         <tr class="bg-gray-50 dark:bg-gray-700/50 border-b border-gray-200 dark:border-gray-700 text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                             <th class="p-4 w-44">NHÂN VIÊN</th>
-                            <template x-for="(day, index) in weekDays" :key="index">
-                                <th class="p-3 text-center border-l border-gray-100 dark:border-gray-700">
-                                    <div x-text="day.shortName" class="text-gray-800 dark:text-white font-bold text-xs"></div>
-                                    <div x-text="day.dateStr" class="text-[10px] text-gray-400 font-normal"></div>
-                                </th>
+                            <template x-for="dayName in ['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN']">
+                                <th class="p-3 text-center border-l border-gray-100 dark:border-gray-700" x-text="dayName"></th>
                             </template>
-                            <th class="p-4 text-center border-l border-gray-100 dark:border-gray-700 w-24">TỔNG CA</th>
-                            <th class="p-4 text-center border-l border-gray-100 dark:border-gray-700 w-16">XÓA</th>
+                            <th class="p-4 text-center border-l border-gray-100 dark:border-gray-700 w-20">HÀNH ĐỘNG</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-gray-100 dark:divide-gray-700 text-sm">
@@ -187,21 +132,19 @@
                             <tr class="hover:bg-gray-50/50 dark:hover:bg-gray-700/30 transition">
                                 <td class="p-4 font-semibold text-gray-800 dark:text-white" x-text="emp.name"></td>
                                 
-                                <template x-for="(day, index) in weekDays" :key="index">
+                                <template x-for="dayIndex in [1, 2, 3, 4, 5, 6, 0]" :key="dayIndex">
                                     <td class="p-2 text-center border-l border-gray-100 dark:border-gray-700 text-xs space-y-1">
                                         <template x-for="shiftNum in [1, 2, 3]" :key="shiftNum">
                                             <label class="flex items-center justify-center gap-1 cursor-pointer select-none text-gray-600 dark:text-gray-300">
                                                 <input type="checkbox" 
-                                                       :checked="hasShift(emp.name, day.dateKey, shiftNum)"
-                                                       @change="toggleShift(emp.name, day.dateKey, shiftNum)"
+                                                       :checked="hasShift(emp.name, dayIndex, shiftNum)"
+                                                       @change="toggleShift(emp.name, dayIndex, shiftNum)"
                                                        class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 w-3.5 h-3.5">
                                                 <span x-text="`Ca ${shiftNum}`" class="text-[11px]"></span>
                                             </label>
                                         </template>
                                     </td>
                                 </template>
-
-                                <td class="p-4 text-center border-l border-gray-100 dark:border-gray-700 font-bold text-indigo-600 dark:text-indigo-400" x-text="getEmployeeTotalShifts(emp.name)"></td>
 
                                 <td class="p-4 text-center border-l border-gray-100 dark:border-gray-700">
                                     <button @click="deleteEmployee(emp.id, emp.name)" class="text-gray-400 hover:text-rose-600 transition">
@@ -216,16 +159,16 @@
         </main>
     </div>
 
-    <!-- SCRIPT ALPINE APP -->
+    <!-- SCRIPT LOGIC -->
     <script>
         document.addEventListener('alpine:init', () => {
             Alpine.data('hrmApp', () => ({
                 isLoggedIn: true,
+                adminForm: { username: 'admin', password: '' },
+                loginError: '',
                 darkMode: false,
                 searchKeyword: '',
                 newEmpName: '',
-                weekOffset: 0,
-                weekDays: [],
                 
                 employees: [
                     { id: 1, name: 'Ngọc Hào' },
@@ -247,7 +190,6 @@
                 shifts: {},
 
                 init() {
-                    this.calculateWeekDays();
                     this.initFirebaseListeners();
                 },
 
@@ -257,30 +199,6 @@
                     window.fbOnValue(shiftsRef, (snapshot) => {
                         this.shifts = snapshot.val() || {};
                     });
-                },
-
-                calculateWeekDays() {
-                    const now = new Date();
-                    now.setDate(now.getDate() + (this.weekOffset * 7));
-                    const currentDay = now.getDay();
-                    const diffToMonday = (currentDay === 0 ? -6 : 1) - currentDay;
-                    const monday = new Date(now);
-                    monday.setDate(now.getDate() + diffToMonday);
-
-                    const days = [];
-                    const dayNames = ['Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6', 'Thứ 7', 'Chủ Nhật'];
-                    for (let i = 0; i < 7; i++) {
-                        const d = new Date(monday);
-                        d.setDate(monday.getDate() + i);
-                        const dateStr = `${d.getDate()}/${d.getMonth() + 1}`;
-                        const dateKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-                        days.push({
-                            shortName: dayNames[i],
-                            dateStr: dateStr,
-                            dateKey: dateKey
-                        });
-                    }
-                    this.weekDays = days;
                 },
 
                 get filteredEmployees() {
@@ -303,87 +221,15 @@
                     }
                 },
 
-                hasShift(empName, dateKey, shiftNum) {
-                    const key = `${empName}_${dateKey}_c${shiftNum}`;
+                hasShift(empName, dayIndex, shiftNum) {
+                    const key = `${empName}_d${dayIndex}_c${shiftNum}`;
                     return !!this.shifts[key];
                 },
 
-                toggleShift(empName, dateKey, shiftNum) {
-                    const key = `${empName}_${dateKey}_c${shiftNum}`;
+                toggleShift(empName, dayIndex, shiftNum) {
+                    const key = `${empName}_d${dayIndex}_c${shiftNum}`;
                     const currentVal = !!this.shifts[key];
                     window.fbSet(window.fbRef(window.db, `shifts/${key}`), !currentVal);
-                },
-
-                getEmployeeTotalShifts(empName) {
-                    let total = 0;
-                    this.weekDays.forEach(day => {
-                        [1, 2, 3].forEach(shiftNum => {
-                            if (this.hasShift(empName, day.dateKey, shiftNum)) {
-                                total++;
-                            }
-                        });
-                    });
-                    return total;
-                },
-
-                copyPreviousWeekSchedule() {
-                    if (!confirm('Sao chép lịch tuần trước sang tuần này?')) return;
-                    const prevWeekDays = this.weekDays.map(day => {
-                        const d = new Date(day.dateKey);
-                        d.setDate(d.getDate() - 7);
-                        return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-                    });
-
-                    const updates = {};
-                    let count = 0;
-                    this.employees.forEach(emp => {
-                        this.weekDays.forEach((currDay, idx) => {
-                            const prevDateKey = prevWeekDays[idx];
-                            [1, 2, 3].forEach(shiftNum => {
-                                if (this.shifts[`${emp.name}_${prevDateKey}_c${shiftNum}`]) {
-                                    updates[`${emp.name}_${currDay.dateKey}_c${shiftNum}`] = true;
-                                    count++;
-                                }
-                            });
-                        });
-                    });
-                    if (count > 0) {
-                        window.fbUpdate(window.fbRef(window.db, 'shifts'), updates)
-                            .then(() => alert(`Đã sao chép thành công ${count} ca!`));
-                    } else {
-                        alert('Không có dữ liệu tuần trước!');
-                    }
-                },
-
-                exportToExcel() {
-                    if (typeof XLSX === 'undefined') return;
-                    const excelData = [];
-                    const header = ['STT', 'Tên nhân viên'];
-                    this.weekDays.forEach(d => header.push(`${d.shortName} (${d.dateStr})`));
-                    header.push('Tổng số ca');
-                    excelData.push(header);
-
-                    this.employees.forEach((emp, i) => {
-                        const row = [i + 1, emp.name];
-                        let total = 0;
-                        this.weekDays.forEach(d => {
-                            const active = [];
-                            [1, 2, 3].forEach(s => {
-                                if (this.hasShift(emp.name, d.dateKey, s)) {
-                                    active.push(`Ca ${s}`);
-                                    total++;
-                                }
-                            });
-                            row.push(active.length > 0 ? active.join(', ') : '-');
-                        });
-                        row.push(total);
-                        excelData.push(row);
-                    });
-
-                    const ws = XLSX.utils.aoa_to_sheet(excelData);
-                    const wb = XLSX.utils.book_new();
-                    XLSX.utils.book_append_sheet(wb, ws, 'LichTruc');
-                    XLSX.writeFile(wb, `BaoCao_LichTruc.xlsx`);
                 },
 
                 toggleDarkMode() {
