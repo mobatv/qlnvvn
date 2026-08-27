@@ -129,7 +129,7 @@
 
         <main class="p-4 md:p-6 max-w-full overflow-x-auto flex-1 space-y-6 mb-16 md:mb-0">
             <!-- THANH ĐIỀU HƯỚNG TUẦN & TRẠNG THÁI -->
-            <div x-show="currentView !== 'monthly'" class="bg-white dark:bg-gray-800 p-4 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4 transition-colors">
+            <div x-show="currentView !== 'monthly' && currentView !== 'settings'" class="bg-white dark:bg-gray-800 p-4 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4 transition-colors">
                 <div class="flex items-center gap-3">
                     <div class="w-10 h-10 bg-indigo-50 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-400 rounded-lg flex items-center justify-center text-lg shrink-0">
                         <i class="fa-solid fa-calendar-days"></i>
@@ -184,6 +184,9 @@
                         <button @click="currentView = 'monthly'" :class="currentView === 'monthly' ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400' : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700'" class="pb-3 border-b-2 font-bold text-sm transition flex items-center gap-2">
                             <i class="fa-solid fa-chart-pie"></i> Thống Kê Tổng Ca Theo Tháng
                         </button>
+                        <button @click="currentView = 'settings'" :class="currentView === 'settings' ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400' : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700'" class="pb-3 border-b-2 font-bold text-sm transition flex items-center gap-2">
+                            <i class="fa-solid fa-sliders"></i> Cấu Hình Ca Trực
+                        </button>
                     </div>
                 </template>
                 <template x-if="role === 'staff'">
@@ -213,6 +216,10 @@
                         <button @click="currentView = 'monthly'" :class="currentView === 'monthly' ? 'text-indigo-600 dark:text-indigo-400' : 'text-gray-500 dark:text-gray-400'" class="flex flex-col items-center gap-1 text-xs font-medium">
                             <i class="fa-solid fa-chart-pie text-lg"></i>
                             <span>Thống kê</span>
+                        </button>
+                        <button @click="currentView = 'settings'" :class="currentView === 'settings' ? 'text-indigo-600 dark:text-indigo-400' : 'text-gray-500 dark:text-gray-400'" class="flex flex-col items-center gap-1 text-xs font-medium">
+                            <i class="fa-solid fa-sliders text-lg"></i>
+                            <span>Cấu hình</span>
                         </button>
                     </div>
                 </template>
@@ -317,9 +324,9 @@
                                         <template x-for="day in weekDays" :key="day.dateStr">
                                             <td class="p-2 text-center">
                                                 <div class="flex justify-center gap-1">
-                                                    <button @click="toggleShift(emp.name, day.dateStr, 'Ca 1')" :class="hasShift(emp.name, day.dateStr, 'Ca 1') ? 'bg-amber-500 text-white shadow-sm' : 'bg-gray-100 dark:bg-gray-700 text-gray-400 dark:text-gray-500 hover:bg-gray-200'" class="px-2 h-7 rounded text-xs font-bold transition flex items-center justify-center" title="Ca 1">Ca 1</button>
-                                                    <button @click="toggleShift(emp.name, day.dateStr, 'Ca 2')" :class="hasShift(emp.name, day.dateStr, 'Ca 2') ? 'bg-indigo-600 text-white shadow-sm' : 'bg-gray-100 dark:bg-gray-700 text-gray-400 dark:text-gray-500 hover:bg-gray-200'" class="px-2 h-7 rounded text-xs font-bold transition flex items-center justify-center" title="Ca 2">Ca 2</button>
-                                                    <button @click="toggleShift(emp.name, day.dateStr, 'Ca 3')" :class="hasShift(emp.name, day.dateStr, 'Ca 3') ? 'bg-purple-600 text-white shadow-sm' : 'bg-gray-100 dark:bg-gray-700 text-gray-400 dark:text-gray-500 hover:bg-gray-200'" class="px-2 h-7 rounded text-xs font-bold transition flex items-center justify-center" title="Ca 3">Ca 3</button>
+                                                    <template x-for="shift in shiftConfig" :key="shift.id">
+                                                        <button @click="toggleShift(emp.name, day.dateStr, shift.name)" :class="hasShift(emp.name, day.dateStr, shift.name) ? shift.activeColor + ' text-white shadow-sm' : 'bg-gray-100 dark:bg-gray-700 text-gray-400 dark:text-gray-500 hover:bg-gray-200'" class="px-2 h-7 rounded text-xs font-bold transition flex items-center justify-center" :title="shift.name + ' (' + shift.time + ')'" x-text="shift.name"></button>
+                                                    </template>
                                                 </div>
                                             </td>
                                         </template>
@@ -352,10 +359,10 @@
                                 <template x-for="day in weekDays" :key="day.dateStr">
                                     <div class="flex justify-between items-center bg-gray-50 dark:bg-gray-700/40 p-2.5 rounded-lg">
                                         <span class="text-xs font-medium text-gray-600 dark:text-gray-300" x-text="day.label + ' (' + day.dateStr + ')'"></span>
-                                        <div class="flex gap-2">
-                                            <button @click="toggleShift(emp.name, day.dateStr, 'Ca 1')" :class="hasShift(emp.name, day.dateStr, 'Ca 1') ? 'bg-amber-500 text-white' : 'bg-gray-200 dark:bg-gray-600 text-gray-500 dark:text-gray-400'" class="px-3 h-9 rounded-lg text-xs font-bold flex items-center justify-center shadow-xs">Ca 1</button>
-                                            <button @click="toggleShift(emp.name, day.dateStr, 'Ca 2')" :class="hasShift(emp.name, day.dateStr, 'Ca 2') ? 'bg-indigo-600 text-white' : 'bg-gray-200 dark:bg-gray-600 text-gray-500 dark:text-gray-400'" class="px-3 h-9 rounded-lg text-xs font-bold flex items-center justify-center shadow-xs">Ca 2</button>
-                                            <button @click="toggleShift(emp.name, day.dateStr, 'Ca 3')" :class="hasShift(emp.name, day.dateStr, 'Ca 3') ? 'bg-purple-600 text-white' : 'bg-gray-200 dark:bg-gray-600 text-gray-500 dark:text-gray-400'" class="px-3 h-9 rounded-lg text-xs font-bold flex items-center justify-center shadow-xs">Ca 3</button>
+                                        <div class="flex gap-1.5">
+                                            <template x-for="shift in shiftConfig" :key="shift.id">
+                                                <button @click="toggleShift(emp.name, day.dateStr, shift.name)" :class="hasShift(emp.name, day.dateStr, shift.name) ? shift.activeColor + ' text-white' : 'bg-gray-200 dark:bg-gray-600 text-gray-500 dark:text-gray-400'" class="px-2.5 h-8 rounded-lg text-xs font-bold flex items-center justify-center shadow-xs" x-text="shift.name"></button>
+                                            </template>
                                         </div>
                                     </div>
                                 </template>
@@ -380,9 +387,9 @@
                                     <div class="text-xs text-gray-400" x-text="day.dateStr"></div>
                                 </div>
                                 <div class="flex gap-2">
-                                    <button @click="toggleShift(currentUser, day.dateStr, 'Ca 1')" :class="hasShift(currentUser, day.dateStr, 'Ca 1') ? 'bg-amber-500 text-white' : 'bg-gray-200 dark:bg-gray-600 text-gray-600 dark:text-gray-300'" class="flex-1 sm:flex-none px-4 py-2 rounded-lg text-xs font-bold transition">Ca 1</button>
-                                    <button @click="toggleShift(currentUser, day.dateStr, 'Ca 2')" :class="hasShift(currentUser, day.dateStr, 'Ca 2') ? 'bg-indigo-600 text-white' : 'bg-gray-200 dark:bg-gray-600 text-gray-600 dark:text-gray-300'" class="flex-1 sm:flex-none px-4 py-2 rounded-lg text-xs font-bold transition">Ca 2</button>
-                                    <button @click="toggleShift(currentUser, day.dateStr, 'Ca 3')" :class="hasShift(currentUser, day.dateStr, 'Ca 3') ? 'bg-purple-600 text-white' : 'bg-gray-200 dark:bg-gray-600 text-gray-600 dark:text-gray-300'" class="flex-1 sm:flex-none px-4 py-2 rounded-lg text-xs font-bold transition">Ca 3</button>
+                                    <template x-for="shift in shiftConfig" :key="shift.id">
+                                        <button @click="toggleShift(currentUser, day.dateStr, shift.name)" :class="hasShift(currentUser, day.dateStr, shift.name) ? shift.activeColor + ' text-white' : 'bg-gray-200 dark:bg-gray-600 text-gray-600 dark:text-gray-300'" class="flex-1 sm:flex-none px-4 py-2 rounded-lg text-xs font-bold transition" x-text="shift.name"></button>
+                                    </template>
                                 </div>
                             </div>
                         </template>
@@ -406,62 +413,27 @@
                     </div>
 
                     <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-                        <!-- Ca 1 -->
-                        <div class="bg-amber-50/50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-800/40 rounded-xl p-4 space-y-3">
-                            <div class="flex items-center justify-between border-b border-amber-200 dark:border-amber-800/40 pb-2">
-                                <span class="font-bold text-amber-700 dark:text-amber-400 text-sm flex items-center gap-1.5"><i class="fa-solid fa-sun"></i> Ca 1</span>
-                                <span class="bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-300 text-xs px-2 py-0.5 rounded-full font-bold" x-text="getShiftStaffList(selectedTimelineDate, 'Ca 1').length + ' người'"></span>
+                        <template x-for="shift in shiftConfig" :key="shift.id">
+                            <div class="bg-gray-50/50 dark:bg-gray-800/40 border border-gray-200 dark:border-gray-700 rounded-xl p-4 space-y-3">
+                                <div class="flex items-center justify-between border-b border-gray-200 dark:border-gray-700 pb-2">
+                                    <span class="font-bold text-gray-800 dark:text-white text-sm flex items-center gap-1.5">
+                                        <i class="fa-solid fa-clock text-indigo-600"></i> <span x-text="shift.name"></span> (<span x-text="shift.time"></span>)
+                                    </span>
+                                    <span class="bg-indigo-100 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300 text-xs px-2 py-0.5 rounded-full font-bold" x-text="getShiftStaffList(selectedTimelineDate, shift.name).length + ' người'"></span>
+                                </div>
+                                <div class="space-y-2">
+                                    <template x-for="name in getShiftStaffList(selectedTimelineDate, shift.name)" :key="name">
+                                        <div class="bg-white dark:bg-gray-700 p-2.5 rounded-lg shadow-2xs text-sm font-medium text-gray-800 dark:text-white flex items-center gap-2">
+                                            <div class="w-6 h-6 rounded-full bg-indigo-100 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-400 flex items-center justify-center text-xs font-bold" x-text="name.charAt(0)"></div>
+                                            <span x-text="name"></span>
+                                        </div>
+                                    </template>
+                                    <template x-if="getShiftStaffList(selectedTimelineDate, shift.name).length === 0">
+                                        <div class="text-xs text-gray-400 text-center py-4 italic">Chưa có nhân viên đăng ký ca này</div>
+                                    </template>
+                                </div>
                             </div>
-                            <div class="space-y-2">
-                                <template x-for="name in getShiftStaffList(selectedTimelineDate, 'Ca 1')" :key="name">
-                                    <div class="bg-white dark:bg-gray-800 p-2.5 rounded-lg shadow-2xs text-sm font-medium text-gray-800 dark:text-white flex items-center gap-2">
-                                        <div class="w-6 h-6 rounded-full bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-400 flex items-center justify-center text-xs font-bold" x-text="name.charAt(0)"></div>
-                                        <span x-text="name"></span>
-                                    </div>
-                                </template>
-                                <template x-if="getShiftStaffList(selectedTimelineDate, 'Ca 1').length === 0">
-                                    <div class="text-xs text-gray-400 text-center py-4 italic">Chưa có nhân viên đăng ký ca này</div>
-                                </template>
-                            </div>
-                        </div>
-
-                        <!-- Ca 2 -->
-                        <div class="bg-indigo-50/50 dark:bg-indigo-900/10 border border-indigo-200 dark:border-indigo-800/40 rounded-xl p-4 space-y-3">
-                            <div class="flex items-center justify-between border-b border-indigo-200 dark:border-indigo-800/40 pb-2">
-                                <span class="font-bold text-indigo-700 dark:text-indigo-400 text-sm flex items-center gap-1.5"><i class="fa-solid fa-cloud-sun"></i> Ca 2</span>
-                                <span class="bg-indigo-100 dark:bg-indigo-900/40 text-indigo-800 dark:text-indigo-300 text-xs px-2 py-0.5 rounded-full font-bold" x-text="getShiftStaffList(selectedTimelineDate, 'Ca 2').length + ' người'"></span>
-                            </div>
-                            <div class="space-y-2">
-                                <template x-for="name in getShiftStaffList(selectedTimelineDate, 'Ca 2')" :key="name">
-                                    <div class="bg-white dark:bg-gray-800 p-2.5 rounded-lg shadow-2xs text-sm font-medium text-gray-800 dark:text-white flex items-center gap-2">
-                                        <div class="w-6 h-6 rounded-full bg-indigo-100 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-400 flex items-center justify-center text-xs font-bold" x-text="name.charAt(0)"></div>
-                                        <span x-text="name"></span>
-                                    </div>
-                                </template>
-                                <template x-if="getShiftStaffList(selectedTimelineDate, 'Ca 2').length === 0">
-                                    <div class="text-xs text-gray-400 text-center py-4 italic">Chưa có nhân viên đăng ký ca này</div>
-                                </template>
-                            </div>
-                        </div>
-
-                        <!-- Ca 3 -->
-                        <div class="bg-purple-50/50 dark:bg-purple-900/10 border border-purple-200 dark:border-purple-800/40 rounded-xl p-4 space-y-3">
-                            <div class="flex items-center justify-between border-b border-purple-200 dark:border-purple-800/40 pb-2">
-                                <span class="font-bold text-purple-700 dark:text-purple-400 text-sm flex items-center gap-1.5"><i class="fa-solid fa-moon"></i> Ca 3</span>
-                                <span class="bg-purple-100 dark:bg-purple-900/40 text-purple-800 dark:text-purple-300 text-xs px-2 py-0.5 rounded-full font-bold" x-text="getShiftStaffList(selectedTimelineDate, 'Ca 3').length + ' người'"></span>
-                            </div>
-                            <div class="space-y-2">
-                                <template x-for="name in getShiftStaffList(selectedTimelineDate, 'Ca 3')" :key="name">
-                                    <div class="bg-white dark:bg-gray-800 p-2.5 rounded-lg shadow-2xs text-sm font-medium text-gray-800 dark:text-white flex items-center gap-2">
-                                        <div class="w-6 h-6 rounded-full bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-400 flex items-center justify-center text-xs font-bold" x-text="name.charAt(0)"></div>
-                                        <span x-text="name"></span>
-                                    </div>
-                                </template>
-                                <template x-if="getShiftStaffList(selectedTimelineDate, 'Ca 3').length === 0">
-                                    <div class="text-xs text-gray-400 text-center py-4 italic">Chưa có nhân viên đăng ký ca này</div>
-                                </template>
-                            </div>
-                        </div>
+                        </template>
                     </div>
                 </div>
             </div>
@@ -483,9 +455,9 @@
                                 <tr class="bg-gray-50 dark:bg-gray-700/50 border-b border-gray-200 dark:border-gray-700 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">
                                     <th class="p-3.5 pl-5">STT</th>
                                     <th class="p-3.5">Họ tên nhân viên</th>
-                                    <th class="p-3.5 text-center">Ca 1</th>
-                                    <th class="p-3.5 text-center">Ca 2</th>
-                                    <th class="p-3.5 text-center">Ca 3</th>
+                                    <template x-for="shift in shiftConfig" :key="shift.id">
+                                        <th class="p-3.5 text-center" x-text="shift.name"></th>
+                                    </template>
                                     <th class="p-3.5 text-center font-bold text-indigo-600 dark:text-indigo-400">Tổng cộng</th>
                                 </tr>
                             </thead>
@@ -494,14 +466,46 @@
                                     <tr class="hover:bg-gray-50/50 dark:hover:bg-gray-700/30 transition">
                                         <td class="p-3.5 pl-5 text-gray-400" x-text="index + 1"></td>
                                         <td class="p-3.5 font-medium text-gray-800 dark:text-white" x-text="emp.name"></td>
-                                        <td class="p-3.5 text-center font-semibold text-amber-600 dark:text-amber-400" x-text="getMonthShiftCount(emp.name, 'Ca 1')"></td>
-                                        <td class="p-3.5 text-center font-semibold text-indigo-600 dark:text-indigo-400" x-text="getMonthShiftCount(emp.name, 'Ca 2')"></td>
-                                        <td class="p-3.5 text-center font-semibold text-purple-600 dark:text-purple-400" x-text="getMonthShiftCount(emp.name, 'Ca 3')"></td>
+                                        <template x-for="shift in shiftConfig" :key="shift.id">
+                                            <td class="p-3.5 text-center font-semibold text-gray-700 dark:text-gray-300" x-text="getMonthShiftCount(emp.name, shift.name)"></td>
+                                        </template>
                                         <td class="p-3.5 text-center font-bold text-indigo-600 dark:text-indigo-400 text-base" x-text="getMonthTotalShifts(emp.name)"></td>
                                     </tr>
                                 </template>
                             </tbody>
                         </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- CHẾ ĐỘ: CẤU HÌNH CA TRỰC (Dành cho Admin) -->
+            <div x-show="role === 'admin' && currentView === 'settings'" class="space-y-6 max-w-2xl mx-auto">
+                <div class="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-700 space-y-6">
+                    <div class="border-b pb-4 dark:border-gray-700">
+                        <h3 class="text-lg font-bold text-gray-800 dark:text-white">Cấu hình Tên và Khung giờ Ca Trực</h3>
+                        <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">Quản trị viên có thể đổi tên ca trực và khung giờ áp dụng cho toàn hệ thống.</p>
+                    </div>
+                    <div class="space-y-4">
+                        <template x-for="(shift, index) in shiftConfig" :key="shift.id">
+                            <div class="bg-gray-50 dark:bg-gray-700/40 p-4 rounded-xl space-y-3 border border-gray-200 dark:border-gray-700">
+                                <div class="font-bold text-sm text-indigo-600 dark:text-indigo-400" x-text="'Ca số ' + (index + 1)"></div>
+                                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                    <div>
+                                        <label class="block text-xs font-medium text-gray-600 dark:text-gray-300 mb-1">Tên ca trực</label>
+                                        <input type="text" x-model="shift.name" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg text-sm">
+                                    </div>
+                                    <div>
+                                        <label class="block text-xs font-medium text-gray-600 dark:text-gray-300 mb-1">Khung giờ</label>
+                                        <input type="text" x-model="shift.time" placeholder="Ví dụ: 08:00 - 12:00" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg text-sm">
+                                    </div>
+                                </div>
+                            </div>
+                        </template>
+                    </div>
+                    <div class="flex justify-end pt-2">
+                        <button @click="saveShiftConfig()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-2.5 rounded-xl text-sm font-medium transition shadow-sm">
+                            <i class="fa-solid fa-floppy-disk mr-1.5"></i> Lưu cấu hình ca
+                        </button>
                     </div>
                 </div>
             </div>
@@ -547,6 +551,11 @@
                 shifts: {},
                 lockedWeeks: {},
                 adminPassword: 'admin123',
+                shiftConfig: [
+                    { id: 1, name: 'Ca 1', time: '08:00 - 12:00', activeColor: 'bg-amber-500' },
+                    { id: 2, name: 'Ca 2', time: '13:30 - 17:30', activeColor: 'bg-indigo-600' },
+                    { id: 3, name: 'Ca 3', time: '18:30 - 21:30', activeColor: 'bg-purple-600' }
+                ],
                 
                 currentWeekOffset: 0,
                 weekDays: [],
@@ -565,6 +574,7 @@
                             this.shifts = data.shifts || {};
                             this.lockedWeeks = data.lockedWeeks || {};
                             if (data.adminPassword) this.adminPassword = data.adminPassword;
+                            if (data.shiftConfig) this.shiftConfig = data.shiftConfig;
                         } else {
                             // Dữ liệu mẫu khởi tạo nếu trống
                             this.employees = [
@@ -582,7 +592,8 @@
                         employees: this.employees,
                         shifts: this.shifts,
                         lockedWeeks: this.lockedWeeks,
-                        adminPassword: this.adminPassword
+                        adminPassword: this.adminPassword,
+                        shiftConfig: this.shiftConfig
                     });
                 },
 
@@ -677,12 +688,12 @@
                     return `Từ ngày ${this.weekDays[0].dateStr} đến ${this.weekDays[6].dateStr}`;
                 },
 
-                hasShift(empName, dateStr, shiftType) {
+                hasShift(empName, dateStr, shiftName) {
                     const wk = this.getWeekKey();
-                    return this.shifts[wk]?.[empName]?.[dateStr]?.[shiftType] || false;
+                    return this.shifts[wk]?.[empName]?.[dateStr]?.[shiftName] || false;
                 },
 
-                toggleShift(empName, dateStr, shiftType) {
+                toggleShift(empName, dateStr, shiftName) {
                     if (this.isCurrentWeekLocked() && this.role !== 'admin') {
                         alert('Tuần này đã bị khóa đăng ký bởi Quản trị viên!');
                         return;
@@ -692,8 +703,8 @@
                     if (!this.shifts[wk][empName]) this.shifts[wk][empName] = {};
                     if (!this.shifts[wk][empName][dateStr]) this.shifts[wk][empName][dateStr] = {};
 
-                    const currentVal = !!this.shifts[wk][empName][dateStr][shiftType];
-                    this.shifts[wk][empName][dateStr][shiftType] = !currentVal;
+                    const currentVal = !!this.shifts[wk][empName][dateStr][shiftName];
+                    this.shifts[wk][empName][dateStr][shiftName] = !currentVal;
 
                     this.saveDataToFirebase();
                 },
@@ -723,8 +734,8 @@
                     let count = 0;
                     if (!this.shifts[wk]?.[empName]) return 0;
                     for (let dateStr in this.shifts[wk][empName]) {
-                        ['Ca 1', 'Ca 2', 'Ca 3'].forEach(st => {
-                            if (this.shifts[wk][empName][dateStr][st]) count++;
+                        this.shiftConfig.forEach(shift => {
+                            if (this.shifts[wk][empName][dateStr][shift.name]) count++;
                         });
                     }
                     return count;
@@ -745,8 +756,8 @@
                     this.weekDays.forEach(day => {
                         let dayTotal = 0;
                         this.employees.forEach(emp => {
-                            ['Ca 1', 'Ca 2', 'Ca 3'].forEach(st => {
-                                if (this.hasShift(emp.name, day.dateStr, st)) dayTotal++;
+                            this.shiftConfig.forEach(shift => {
+                                if (this.hasShift(emp.name, day.dateStr, shift.name)) dayTotal++;
                             });
                         });
                         if (dayTotal > maxCount) {
@@ -757,18 +768,18 @@
                     return maxCount > 0 ? `${peakDay} (${maxCount} ca)` : 'Chưa có dữ liệu';
                 },
 
-                getShiftStaffList(dateStr, shiftType) {
+                getShiftStaffList(dateStr, shiftName) {
                     let list = [];
                     const wk = this.getWeekKey();
                     this.employees.forEach(emp => {
-                        if (this.shifts[wk]?.[emp.name]?.[dateStr]?.[shiftType]) {
+                        if (this.shifts[wk]?.[emp.name]?.[dateStr]?.[shiftName]) {
                             list.push(emp.name);
                         }
                     });
                     return list;
                 },
 
-                getMonthShiftCount(empName, shiftType) {
+                getMonthShiftCount(empName, shiftName) {
                     let count = 0;
                     for (let wk in this.shifts) {
                         if (this.shifts[wk]?.[empName]) {
@@ -776,7 +787,7 @@
                                 const parts = dateStr.split('/');
                                 if (parts.length === 3) {
                                     const dMonth = `${parts[2]}-${parts[1]}`;
-                                    if (dMonth === this.selectedMonth && this.shifts[wk][empName][dateStr][shiftType]) {
+                                    if (dMonth === this.selectedMonth && this.shifts[wk][empName][dateStr][shiftName]) {
                                         count++;
                                     }
                                 }
@@ -787,9 +798,11 @@
                 },
 
                 getMonthTotalShifts(empName) {
-                    return this.getMonthShiftCount(empName, 'Ca 1') + 
-                           this.getMonthShiftCount(empName, 'Ca 2') + 
-                           this.getMonthShiftCount(empName, 'Ca 3');
+                    let total = 0;
+                    this.shiftConfig.forEach(shift => {
+                        total += this.getMonthShiftCount(empName, shift.name);
+                    });
+                    return total;
                 },
 
                 exportWeeklyToExcel() {
@@ -805,9 +818,9 @@
                         let row = [`"${emp.name}"`];
                         this.weekDays.forEach(day => {
                             let shifts = [];
-                            ['Ca 1', 'Ca 2', 'Ca 3'].forEach(st => {
-                                if (this.hasShift(emp.name, day.dateStr, st)) {
-                                    shifts.push(st);
+                            this.shiftConfig.forEach(shift => {
+                                if (this.hasShift(emp.name, day.dateStr, shift.name)) {
+                                    shifts.push(shift.name);
                                 }
                             });
                             row.push(`"${shifts.join(' - ')}"`);
@@ -823,6 +836,11 @@
                     document.body.appendChild(link);
                     link.click();
                     document.body.removeChild(link);
+                },
+
+                saveShiftConfig() {
+                    this.saveDataToFirebase();
+                    alert('Đã cập nhật cấu hình ca trực thành công!');
                 },
 
                 updateAdminPassword() {
