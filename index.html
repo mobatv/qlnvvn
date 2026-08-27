@@ -46,6 +46,31 @@
 </head>
 <body class="bg-gray-100 dark:bg-gray-900 font-sans transition-colors duration-200 pb-20 md:pb-0" x-data="hrmApp()">
 
+    <!-- KHU VỰC HIỂN THỊ TOAST NOTIFICATION -->
+    <div class="fixed top-5 right-5 z-50 space-y-3 pointer-events-none" x-cloak>
+        <template x-for="toast in toasts" :key="toast.id">
+            <div x-transition:enter="transition ease-out duration-300"
+                 x-transition:enter-start="translate-y-[-20px] opacity-0 scale-95"
+                 x-transition:enter-end="translate-y-0 opacity-100 scale-100"
+                 x-transition:leave="transition ease-in duration-200"
+                 x-transition:leave-start="opacity-100 scale-100"
+                 x-transition:leave-end="opacity-0 scale-95"
+                 class="pointer-events-auto flex items-center gap-3 px-4 py-3 rounded-xl shadow-lg border text-sm font-medium backdrop-blur-md"
+                 :class="{
+                     'bg-emerald-50/90 dark:bg-emerald-900/90 border-emerald-200 dark:border-emerald-700 text-emerald-800 dark:text-emerald-200': toast.type === 'success',
+                     'bg-rose-50/90 dark:bg-rose-900/90 border-rose-200 dark:border-rose-700 text-rose-800 dark:text-rose-200': toast.type === 'error',
+                     'bg-blue-50/90 dark:bg-blue-900/90 border-blue-200 dark:border-blue-700 text-blue-800 dark:text-blue-200': toast.type === 'info'
+                 }">
+                <i :class="{
+                    'fa-solid fa-circle-check text-emerald-600 dark:text-emerald-400 text-base': toast.type === 'success',
+                    'fa-solid fa-circle-exclamation text-rose-600 dark:text-rose-400 text-base': toast.type === 'error',
+                    'fa-solid fa-circle-info text-blue-600 dark:text-blue-400 text-base': toast.type === 'info'
+                }"></i>
+                <span x-text="toast.message"></span>
+            </div>
+        </template>
+    </div>
+
     <!-- MÀN HÌNH ĐĂNG NHẬP -->
     <div x-show="!isLoggedIn" class="fixed inset-0 bg-gray-900/60 backdrop-blur-sm flex items-center justify-center z-50 p-4" x-cloak>
         <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-md overflow-hidden border border-gray-100 dark:border-gray-700">
@@ -556,6 +581,7 @@
                     { id: 2, name: 'Ca 2', time: '13:30 - 17:30', activeColor: 'bg-indigo-600' },
                     { id: 3, name: 'Ca 3', time: '18:30 - 21:30', activeColor: 'bg-purple-600' }
                 ],
+                toasts: [],
                 
                 currentWeekOffset: 0,
                 weekDays: [],
@@ -587,6 +613,14 @@
                     });
                 },
 
+                showToast(message, type = 'success') {
+                    const id = Date.now();
+                    this.toasts.push({ id, message, type });
+                    setTimeout(() => {
+                        this.toasts = this.toasts.filter(t => t.id !== id);
+                    }, 3000);
+                },
+
                 saveDataToFirebase() {
                     window.fbSet(window.fbRef(window.db, 'hrm_data'), {
                         employees: this.employees,
@@ -607,6 +641,7 @@
                     this.currentView = 'staffregister';
                     this.isLoggedIn = true;
                     this.loginError = '';
+                    this.showToast(`Xin chào ${this.currentUser}!`, 'success');
                 },
 
                 handleAdminLogin() {
@@ -616,6 +651,7 @@
                         this.currentView = 'table';
                         this.isLoggedIn = true;
                         this.loginError = '';
+                        this.showToast('Đăng nhập quản trị thành công!', 'success');
                     } else {
                         this.loginError = 'Sai tên đăng nhập hoặc mật khẩu!';
                     }
@@ -626,6 +662,7 @@
                     this.selectedStaffName = '';
                     this.adminForm = { username: '', password: '' };
                     this.loginError = '';
+                    this.showToast('Đã đăng xuất tài khoản', 'info');
                 },
 
                 toggleDarkMode() {
@@ -681,6 +718,11 @@
                     const wk = this.getWeekKey();
                     this.lockedWeeks[wk] = !this.lockedWeeks[wk];
                     this.saveDataToFirebase();
+                    if (this.lockedWeeks[wk]) {
+                        this.showToast('Đã khóa tuần làm việc thành công!', 'info');
+                    } else {
+                        this.showToast('Đã mở khóa tuần làm việc!', 'success');
+                    }
                 },
 
                 getWeekDisplayString() {
@@ -695,7 +737,7 @@
 
                 toggleShift(empName, dateStr, shiftName) {
                     if (this.isCurrentWeekLocked() && this.role !== 'admin') {
-                        alert('Tuần này đã bị khóa đăng ký bởi Quản trị viên!');
+                        this.showToast('Tuần này đã bị khóa đăng ký bởi Quản trị viên!', 'error');
                         return;
                     }
                     const wk = this.getWeekKey();
@@ -707,6 +749,7 @@
                     this.shifts[wk][empName][dateStr][shiftName] = !currentVal;
 
                     this.saveDataToFirebase();
+                    this.showToast('Đã cập nhật ca trực thành công!', 'success');
                 },
 
                 addEmployee() {
@@ -715,12 +758,14 @@
                     this.employees.push({ id: newId, name: this.newEmpName.trim() });
                     this.newEmpName = '';
                     this.saveDataToFirebase();
+                    this.showToast('Đã thêm nhân viên mới thành công!', 'success');
                 },
 
                 deleteEmployee(id) {
                     if (confirm('Bạn có chắc chắn muốn xóa nhân viên này?')) {
                         this.employees = this.employees.filter(e => e.id !== id);
                         this.saveDataToFirebase();
+                        this.showToast('Đã xóa nhân viên khỏi hệ thống', 'info');
                     }
                 },
 
@@ -836,11 +881,12 @@
                     document.body.appendChild(link);
                     link.click();
                     document.body.removeChild(link);
+                    this.showToast('Đã xuất file Excel tuần thành công!', 'success');
                 },
 
                 saveShiftConfig() {
                     this.saveDataToFirebase();
-                    alert('Đã cập nhật cấu hình ca trực thành công!');
+                    this.showToast('Đã cập nhật cấu hình ca trực thành công!', 'success');
                 },
 
                 updateAdminPassword() {
@@ -849,7 +895,7 @@
                     this.newAdminPassword = '';
                     this.showPasswordModal = false;
                     this.saveDataToFirebase();
-                    alert('Đổi mật khẩu thành công!');
+                    this.showToast('Đổi mật khẩu quản trị thành công!', 'success');
                 }
             }
         }
