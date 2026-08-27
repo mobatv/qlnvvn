@@ -575,7 +575,8 @@
                 employees: [],
                 shifts: {},
                 lockedWeeks: {},
-                adminPassword: 'admin123',
+                // Mặc định mã băm SHA-256 của chuỗi "admin123"
+                adminPasswordHash: '240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a9',
                 shiftConfig: [
                     { id: 1, name: 'Ca 1', time: '08:00 - 12:00', activeColor: 'bg-amber-500' },
                     { id: 2, name: 'Ca 2', time: '13:30 - 17:30', activeColor: 'bg-indigo-600' },
@@ -599,7 +600,7 @@
                             this.employees = data.employees || [];
                             this.shifts = data.shifts || {};
                             this.lockedWeeks = data.lockedWeeks || {};
-                            if (data.adminPassword) this.adminPassword = data.adminPassword;
+                            if (data.adminPasswordHash) this.adminPasswordHash = data.adminPasswordHash;
                             if (data.shiftConfig) this.shiftConfig = data.shiftConfig;
                         } else {
                             // Dữ liệu mẫu khởi tạo nếu trống
@@ -611,6 +612,14 @@
                             this.saveDataToFirebase();
                         }
                     });
+                },
+
+                // Hàm băm mật khẩu chuẩn SHA-256
+                async hashPassword(password) {
+                    const msgBuffer = new TextEncoder().encode(password);
+                    const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
+                    const hashArray = Array.from(new Uint8Array(hashBuffer));
+                    return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
                 },
 
                 showToast(message, type = 'success') {
@@ -626,7 +635,7 @@
                         employees: this.employees,
                         shifts: this.shifts,
                         lockedWeeks: this.lockedWeeks,
-                        adminPassword: this.adminPassword,
+                        adminPasswordHash: this.adminPasswordHash,
                         shiftConfig: this.shiftConfig
                     });
                 },
@@ -644,8 +653,9 @@
                     this.showToast(`Xin chào ${this.currentUser}!`, 'success');
                 },
 
-                handleAdminLogin() {
-                    if (this.adminForm.username === 'admin' && this.adminForm.password === this.adminPassword) {
+                async handleAdminLogin() {
+                    const inputHash = await this.hashPassword(this.adminForm.password);
+                    if (this.adminForm.username === 'admin' && inputHash === this.adminPasswordHash) {
                         this.currentUser = 'Quản trị viên';
                         this.role = 'admin';
                         this.currentView = 'table';
@@ -889,9 +899,9 @@
                     this.showToast('Đã cập nhật cấu hình ca trực thành công!', 'success');
                 },
 
-                updateAdminPassword() {
+                async updateAdminPassword() {
                     if (!this.newAdminPassword.trim()) return;
-                    this.adminPassword = this.newAdminPassword.trim();
+                    this.adminPasswordHash = await this.hashPassword(this.newAdminPassword.trim());
                     this.newAdminPassword = '';
                     this.showPasswordModal = false;
                     this.saveDataToFirebase();
