@@ -36,7 +36,6 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     
     <style>
-        /* Ẩn thanh cuộn trên mobile nhưng vẫn vuốt mượt mà được */
         .no-scrollbar::-webkit-scrollbar {
             display: none;
         }
@@ -177,7 +176,7 @@
                 </div>
             </div>
 
-            <!-- THANH CHUYỂN ĐỔI CHẾ ĐỘ XEM (Hỗ trợ trượt ngang mượt mà trên mobile) -->
+            <!-- THANH CHUYỂN ĐỔI CHẾ ĐỘ XEM -->
             <div class="flex border-b border-gray-200 dark:border-gray-700 gap-6 overflow-x-auto no-scrollbar whitespace-nowrap">
                 <template x-if="role === 'admin'">
                     <div class="flex gap-6">
@@ -272,7 +271,7 @@
                     </div>
                 </div>
 
-                <!-- BẢNG LỊCH: Đã thêm tính năng cố định cột "NHÂN VIÊN" bên trái (Sticky Column) khi cuộn ngang trên điện thoại -->
+                <!-- BẢNG LỊCH: Cố định cột tên nhân viên bên trái -->
                 <div class="bg-white dark:bg-gray-800 rounded-b-xl shadow-sm overflow-x-auto transition-colors">
                     <table class="w-full text-left border-collapse min-w-[1100px]">
                         <thead>
@@ -288,7 +287,6 @@
                         <tbody class="divide-y divide-gray-200 dark:divide-gray-700 text-sm text-gray-800 dark:text-gray-200">
                             <template x-for="emp in filteredEmployees" :key="emp.id">
                                 <tr class="hover:bg-gray-50/50 dark:hover:bg-gray-700/30 transition">
-                                    <!-- Cột tên nhân viên cố định bên trái -->
                                     <td class="py-3 px-4 font-bold border-r border-gray-200 dark:border-gray-700 sticky left-0 bg-white dark:bg-gray-800 z-10 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">
                                         <div x-text="emp.name" class="mb-1 truncate max-w-[140px]" :title="emp.name"></div>
                                         <div class="flex gap-1.5 text-[10px]">
@@ -298,7 +296,6 @@
                                         </div>
                                     </td>
                                     
-                                    <!-- Các ô Checkbox ca trực (Tăng diện tích chạm trên di động) -->
                                     <template x-for="day in days" :key="day.key">
                                         <td class="py-2 px-1 border-r border-gray-200 dark:border-gray-700 text-center align-middle">
                                             <div class="flex flex-col gap-1 items-center justify-center">
@@ -579,7 +576,7 @@
         </div>
     </div>
 
-    <!-- Script Logic ứng dụng kết nối Firebase Realtime -->
+    <!-- Script Logic ứng dụng kết nối Firebase Realtime với cấu trúc tách tuần -->
     <script>
         function hrmApp() {
             return {
@@ -621,41 +618,69 @@
 
                 init() {
                     if (window.db && window.fbRef && window.fbOnValue) {
-                        const scheduleRef = window.fbRef(window.db, 'hrm_smart_schedule_data');
-                        window.fbOnValue(scheduleRef, (snapshot) => {
+                        // 1. Lắng nghe danh sách nhân viên cố định
+                        const empRef = window.fbRef(window.db, 'hrm_smart_schedule_data/employees_list');
+                        window.fbOnValue(empRef, (snapshot) => {
                             const data = snapshot.val();
-                            if (data && data.employees) {
-                                if (Array.isArray(data.employees)) {
-                                    this.employees = data.employees;
+                            if (data) {
+                                if (Array.isArray(data)) {
+                                    this.employees = data;
                                 } else {
-                                    this.employees = Object.keys(data.employees).map(key => ({
+                                    this.employees = Object.keys(data).map(key => ({
                                         id: key,
-                                        ...data.employees[key]
+                                        ...data[key]
                                     }));
                                 }
-                                if (data.lockedWeeks) this.lockedWeeks = data.lockedWeeks;
-                            } else if (!data) {
+                                // Sau khi có danh sách nhân viên, tải tiếp dữ liệu tuần hiện tại
+                                this.loadCurrentWeekData();
+                            } else {
+                                // Khởi tạo danh sách mặc định nếu hoàn toàn trống
                                 this.employees = [
-                                    { id: '1', name: 'Ngọc Hào', schedule: window.getInitialSchedules() },
-                                    { id: '2', name: 'Anh Bình', schedule: window.getInitialSchedules() },
-                                    { id: '3', name: 'Anh Đĩnh', schedule: window.getInitialSchedules() },
-                                    { id: '4', name: 'Anh Vũ', schedule: window.getInitialSchedules() },
-                                    { id: '5', name: 'anh Chiến', schedule: window.getInitialSchedules() },
-                                    { id: '6', name: 'Anh Tú', schedule: window.getInitialSchedules() },
-                                    { id: '7', name: 'Anh Hậu', schedule: window.getInitialSchedules() },
-                                    { id: '8', name: 'Trung', schedule: window.getInitialSchedules() },
-                                    { id: '9', name: 'Anh Xuân Huy', schedule: window.getInitialSchedules() },
-                                    { id: '10', name: 'Công', schedule: window.getInitialSchedules() },
-                                    { id: '11', name: 'Phạm phong', schedule: window.getInitialSchedules() },
-                                    { id: '12', name: 'Duy Anh', schedule: window.getInitialSchedules() },
-                                    { id: '13', name: 'Việt Nam', schedule: window.getInitialSchedules() },
-                                    { id: '14', name: 'Anh Phong Gió', schedule: window.getInitialSchedules() },
-                                    { id: '15', name: 'Khánh Nam', schedule: window.getInitialSchedules() }
+                                    { id: '1', name: 'Ngọc Hào' },
+                                    { id: '2', name: 'Anh Bình' },
+                                    { id: '3', name: 'Anh Đĩnh' },
+                                    { id: '4', name: 'Anh Vũ' },
+                                    { id: '5', name: 'anh Chiến' },
+                                    { id: '6', name: 'Anh Tú' },
+                                    { id: '7', name: 'Anh Hậu' },
+                                    { id: '8', name: 'Trung' },
+                                    { id: '9', name: 'Anh Xuân Huy' },
+                                    { id: '10', name: 'Công' },
+                                    { id: '11', name: 'Phạm phong' },
+                                    { id: '12', name: 'Duy Anh' },
+                                    { id: '13', name: 'Việt Nam' },
+                                    { id: '14', name: 'Anh Phong Gió' },
+                                    { id: '15', name: 'Khánh Nam' }
                                 ];
-                                this.saveToStorage();
+                                this.saveEmployeesToStorage();
+                                this.loadCurrentWeekData();
                             }
                         });
                     }
+                },
+
+                loadCurrentWeekData() {
+                    if (!window.db || !window.fbRef) return;
+                    
+                    // Lắng nghe trạng thái khóa của tuần hiện tại
+                    const lockRef = window.fbRef(window.db, `hrm_smart_schedule_data/lockedWeeks/${this.currentWeekKey}`);
+                    window.fbOnValue(lockRef, (snapshot) => {
+                        this.lockedWeeks[this.currentWeekKey] = snapshot.val() || false;
+                    });
+
+                    // Lắng nghe dữ liệu lịch của tuần hiện tại
+                    const weekRef = window.fbRef(window.db, `hrm_smart_schedule_data/schedules_by_week/${this.currentWeekKey}`);
+                    window.fbOnValue(weekRef, (snapshot) => {
+                        const weekData = snapshot.val();
+                        this.employees.forEach(emp => {
+                            if (!emp.schedule) emp.schedule = {};
+                            if (weekData && weekData[emp.id]) {
+                                emp.schedule[this.currentWeekKey] = weekData[emp.id];
+                            } else {
+                                emp.schedule[this.currentWeekKey] = window.getDefaultWeekSchedule();
+                            }
+                        });
+                    });
                 },
 
                 toggleDarkMode() {
@@ -714,8 +739,14 @@
                     return `${dd}/${mm}`;
                 },
 
-                changeWeek(direction) { this.currentWeekOffset += direction; },
-                resetToCurrentWeek() { this.currentWeekOffset = 0; },
+                changeWeek(direction) { 
+                    this.currentWeekOffset += direction; 
+                    this.loadCurrentWeekData(); 
+                },
+                resetToCurrentWeek() { 
+                    this.currentWeekOffset = 0; 
+                    this.loadCurrentWeekData(); 
+                },
                 getDayFullName(dKey) {
                     const found = this.days.find(d => d.key === dKey);
                     return found ? found.name : '';
@@ -896,17 +927,16 @@
                     const newId = 'emp_' + Date.now() + '_' + Math.floor(Math.random() * 1000);
                     this.employees.push({
                         id: newId,
-                        name: this.newEmpName.trim(),
-                        schedule: window.getInitialSchedules()
+                        name: this.newEmpName.trim()
                     });
                     this.newEmpName = '';
-                    this.saveToStorage();
+                    this.saveEmployeesToStorage();
                 },
 
                 deleteEmployee(id) {
                     if (confirm('Bạn có chắc chắn muốn xóa nhân viên này khỏi hệ thống?')) {
                         this.employees = this.employees.filter(e => e.id !== id);
-                        this.saveToStorage();
+                        this.saveEmployeesToStorage();
                     }
                 },
 
@@ -924,29 +954,33 @@
                     }
                 },
 
+                saveEmployeesToStorage() {
+                    if (window.db && window.fbRef && window.fbSet) {
+                        window.fbSet(window.fbRef(window.db, 'hrm_smart_schedule_data/employees_list'), this.employees).catch((err) => {
+                            console.error("Lỗi khi lưu danh sách nhân viên lên Firebase:", err);
+                        });
+                    }
+                },
+
                 saveToStorage() {
                     if (this.isCurrentWeekLocked() && this.role === 'staff') {
                         alert('Lịch tuần này đã bị khóa, thao tác của bạn không được lưu.');
                         return;
                     }
+                    
+                    let currentWeekScheduleData = {};
                     this.employees.forEach(emp => {
                         if (!emp.schedule) emp.schedule = {};
                         if (!emp.schedule[this.currentWeekKey]) {
                             emp.schedule[this.currentWeekKey] = window.getDefaultWeekSchedule();
                         }
+                        currentWeekScheduleData[emp.id] = emp.schedule[this.currentWeekKey];
                     });
 
                     if (window.db && window.fbRef && window.fbSet) {
-                        window.fbSet(window.fbRef(window.db, 'hrm_smart_schedule_data'), {
-                            employees: this.employees,
-                            lockedWeeks: this.lockedWeeks
-                        }).catch((err) => {
-                            console.error("Lỗi khi lưu dữ liệu lên Firebase:", err);
-                        });
+                        window.fbSet(window.fbRef(window.db, `hrm_smart_schedule_data/schedules_by_week/${this.currentWeekKey}`), currentWeekScheduleData);
+                        window.fbSet(window.fbRef(window.db, `hrm_smart_schedule_data/lockedWeeks/${this.currentWeekKey}`), !!this.lockedWeeks[this.currentWeekKey]);
                     }
-
-                    localStorage.setItem('hrm_smart_schedule', JSON.stringify(this.employees));
-                    localStorage.setItem('hrm_locked_weeks', JSON.stringify(this.lockedWeeks));
                 },
 
                 exportDailyReportWord(dKey) {
@@ -1020,16 +1054,6 @@
                 sched[d] = { ca1: checked, ca2: checked, ca3: checked };
             });
             return sched;
-        }
-
-        window.getInitialSchedules = function() {
-            let initial = {};
-            let d = new Date();
-            let day = d.getDay();
-            let diff = d.getDate() - day + (day === 0 ? -6 : 1);
-            let monday = new Date(d.setDate(diff)).toISOString().slice(0, 10);
-            initial[monday] = window.getDefaultWeekSchedule();
-            return initial;
         }
     </script>
 </body>
