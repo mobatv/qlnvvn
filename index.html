@@ -5,23 +5,15 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>HRM Smart Schedule - Quản lý lịch trực</title>
     
+    <!-- Cấu hình Firebase riêng biệt để không bị ghi đè khi cập nhật giao diện -->
+    <script src="config.js"></script>
+
     <!-- Firebase App & Database (Modular SDK) -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
         import { getDatabase, ref, set, onValue, update } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
 
-       const firebaseConfig = {
-  apiKey: "AIzaSyB82JABeqIWdQm1842qnnWIvuaeyRNgyog",
-  authDomain: "vpsvn-8ebd6.firebaseapp.com",
-  databaseURL: "https://vpsvn-8ebd6-default-rtdb.asia-southeast1.firebasedatabase.app",
-  projectId: "vpsvn-8ebd6",
-  storageBucket: "vpsvn-8ebd6.firebasestorage.app",
-  messagingSenderId: "947319716277",
-  appId: "1:947319716277:web:5ed25aae69ec7f5e0501fc",
-  measurementId: "G-RWKZQDVVR5"
-};
-
-        const app = initializeApp(firebaseConfig);
+        const app = initializeApp(window.APP_CONFIG.firebaseConfig);
         const db = getDatabase(app);
 
         window.db = db;
@@ -606,25 +598,23 @@
                 lockedWeeks: {},
 
                 init() {
-                    // Đồng bộ Realtime từ Firebase Database (Xử lý an toàn cấu trúc mảng và chống mất dữ liệu khi mới khởi tạo)
+                    // Lắng nghe realtime từ Firebase và đảm bảo không bị ghi đè mất nhân viên khi reload
                     if (window.db && window.fbRef && window.fbOnValue) {
                         const scheduleRef = window.fbRef(window.db, 'hrm_smart_schedule_data');
                         window.fbOnValue(scheduleRef, (snapshot) => {
                             const data = snapshot.val();
-                            if (data) {
-                                if (data.employees) {
-                                    if (Array.isArray(data.employees)) {
-                                        this.employees = data.employees;
-                                    } else {
-                                        this.employees = Object.keys(data.employees).map(key => ({
-                                            id: key,
-                                            ...data.employees[key]
-                                        }));
-                                    }
+                            if (data && data.employees) {
+                                if (Array.isArray(data.employees)) {
+                                    this.employees = data.employees;
+                                } else {
+                                    this.employees = Object.keys(data.employees).map(key => ({
+                                        id: key,
+                                        ...data.employees[key]
+                                    }));
                                 }
                                 if (data.lockedWeeks) this.lockedWeeks = data.lockedWeeks;
-                            } else {
-                                // Nếu Firebase trống, nạp danh sách mẫu mặc định ban đầu và đẩy lên DB
+                            } else if (!data) {
+                                // Nếu Firebase hoàn toàn trống, nạp danh sách ban đầu
                                 this.employees = [
                                     { id: '1', name: 'Ngọc Hào', schedule: window.getInitialSchedules() },
                                     { id: '2', name: 'Anh Bình', schedule: window.getInitialSchedules() },
@@ -642,7 +632,7 @@
                                     { id: '14', name: 'Anh Phong Gió', schedule: window.getInitialSchedules() },
                                     { id: '15', name: 'Khánh Nam', schedule: window.getInitialSchedules() }
                                 ];
-                               this.saveToStorage();
+                                this.saveToStorage();
                             }
                         });
                     }
