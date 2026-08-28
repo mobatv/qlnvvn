@@ -51,6 +51,7 @@
                 <template x-if="loginError">
                     <div class="bg-rose-50 text-rose-600 text-sm p-3 rounded-lg text-center font-medium" x-text="loginError"></div>
                 </template>
+                
                 <!-- Form Nhân viên -->
                 <form x-show="loginType === 'staff'" @submit.prevent="handleStaffLogin" class="space-y-4">
                     <div>
@@ -64,6 +65,7 @@
                     </div>
                     <button type="submit" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-3 rounded-xl transition">Vào Đăng Ký Lịch Trực</button>
                 </form>
+
                 <!-- Form Admin -->
                 <form x-show="loginType === 'admin'" @submit.prevent="handleAdminLogin" class="space-y-4">
                     <div>
@@ -76,8 +78,9 @@
                     </div>
                     <button type="submit" class="w-full bg-purple-600 hover:bg-purple-700 text-white font-medium py-3 rounded-xl transition">Đăng Nhập Quản Trị Viên</button>
                 </form>
+
                 <div class="text-center pt-2">
-                    <button @click="loginType = loginType === 'staff' ? 'admin' : 'staff'; loginError = ''" class="text-xs text-indigo-600 dark:text-indigo-400 hover:underline">
+                    <button type="button" @click="loginType = loginType === 'staff' ? 'admin' : 'staff'; loginError = ''" class="text-xs text-indigo-600 dark:text-indigo-400 hover:underline">
                         <span x-text="loginType === 'staff' ? 'Chuyển sang đăng nhập Quản trị viên' : 'Quay lại đăng nhập Nhân viên'"></span>
                     </button>
                 </div>
@@ -129,6 +132,10 @@
                 role: 'staff',
                 currentUser: '',
                 selectedStaffName: '',
+                adminForm: {
+                    username: '',
+                    password: ''
+                },
                 loginError: '',
                 darkMode: false,
                 currentView: 'settings',
@@ -137,7 +144,6 @@
                 toasts: [],
 
                 init() {
-                    // Lắng nghe dữ liệu nhân viên từ Firebase Realtime Database thời gian thực đúng chuẩn Object map sang Array
                     window.fbOnValue(window.fbRef(window.db, 'employees'), (snapshot) => {
                         const data = snapshot.val();
                         if (data) {
@@ -161,7 +167,6 @@
 
                 addEmployee() {
                     if (!this.newStaffName.trim()) return;
-                    // Sử dụng push() để cấp phát khóa định danh riêng biệt, tránh ghi đè dữ liệu cũ
                     const empRef = window.fbRef(window.db, 'employees');
                     const newEmpRef = window.fbPush(empRef);
                     window.fbSet(newEmpRef, {
@@ -183,10 +188,14 @@
                 },
 
                 handleStaffLogin() {
-                    if (!this.selectedStaffName) return;
+                    if (!this.selectedStaffName) {
+                        this.loginError = 'Vui lòng chọn tên nhân viên!';
+                        return;
+                    }
                     this.currentUser = this.selectedStaffName;
                     this.role = 'staff';
                     this.isLoggedIn = true;
+                    this.loginError = '';
                 },
 
                 handleAdminLogin() {
@@ -194,6 +203,7 @@
                         this.currentUser = 'Quản trị viên';
                         this.role = 'admin';
                         this.isLoggedIn = true;
+                        this.loginError = '';
                     } else {
                         this.loginError = 'Sai tên đăng nhập hoặc mật khẩu!';
                     }
@@ -202,6 +212,8 @@
                 logout() {
                     this.isLoggedIn = false;
                     this.currentUser = '';
+                    this.adminForm.username = '';
+                    this.adminForm.password = '';
                 },
 
                 toggleDarkMode() {
