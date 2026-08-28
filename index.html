@@ -6,27 +6,30 @@
     <title>HRM Smart Schedule - Quản lý lịch trực</title>
     
     <!-- Firebase App & Database (Modular SDK) -->
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>HRM Smart Schedule - Quản lý lịch trực</title>
-    
-    <!-- Gọi file cấu hình Firebase -->
-    <script type="module" src="./config.js"></script>
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+        import { getDatabase, ref, set, onValue, update } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
 
-    <!-- Tailwind CSS -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script>
-        tailwind.config = {
-            darkMode: 'class',
-        }
+        const firebaseConfig = {
+            apiKey: "AIzaSyCqsv8xo0KsAyM-TYIE58jqVvS2JPAeMk",
+            authDomain: "ngochao-90782.firebaseapp.com",
+            databaseURL: "https://ngochao-90782-default-rtdb.firebaseio.com",
+            projectId: "ngochao-90782",
+            storageBucket: "ngochao-90782.firebasestorage.app",
+            messagingSenderId: "609549450140",
+            appId: "1:609549450140:web:4abf6b9a681805ff412659",
+            measurementId: "G-T8YGX6ZW0D"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getDatabase(app);
+
+        window.db = db;
+        window.fbRef = ref;
+        window.fbSet = set;
+        window.fbOnValue = onValue;
+        window.fbUpdate = update;
     </script>
-    <!-- Alpine.js -->
-    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
-    <!-- FontAwesome -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-</head>
-
 
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -603,25 +606,23 @@
                 lockedWeeks: {},
 
                 init() {
-                    // Đồng bộ Realtime từ Firebase Database (Xử lý an toàn cấu trúc mảng và chống mất dữ liệu khi mới khởi tạo)
+                    // Lắng nghe realtime: Chỉ nạp danh sách mẫu khi Firebase hoàn toàn trống chưa có gì
                     if (window.db && window.fbRef && window.fbOnValue) {
                         const scheduleRef = window.fbRef(window.db, 'hrm_smart_schedule_data');
                         window.fbOnValue(scheduleRef, (snapshot) => {
                             const data = snapshot.val();
-                            if (data) {
-                                if (data.employees) {
-                                    if (Array.isArray(data.employees)) {
-                                        this.employees = data.employees;
-                                    } else {
-                                        this.employees = Object.keys(data.employees).map(key => ({
-                                            id: key,
-                                            ...data.employees[key]
-                                        }));
-                                    }
+                            if (data && data.employees) {
+                                if (Array.isArray(data.employees)) {
+                                    this.employees = data.employees;
+                                } else {
+                                    this.employees = Object.keys(data.employees).map(key => ({
+                                        id: key,
+                                        ...data.employees[key]
+                                    }));
                                 }
                                 if (data.lockedWeeks) this.lockedWeeks = data.lockedWeeks;
-                            } else {
-                                // Nếu Firebase trống, nạp danh sách mẫu mặc định ban đầu và đẩy lên DB
+                            } else if (!data) {
+                                // Chỉ khởi tạo dữ liệu mặc định 1 lần duy nhất khi Firebase trống hẳn
                                 this.employees = [
                                     { id: '1', name: 'Ngọc Hào', schedule: window.getInitialSchedules() },
                                     { id: '2', name: 'Anh Bình', schedule: window.getInitialSchedules() },
@@ -639,7 +640,7 @@
                                     { id: '14', name: 'Anh Phong Gió', schedule: window.getInitialSchedules() },
                                     { id: '15', name: 'Khánh Nam', schedule: window.getInitialSchedules() }
                                 ];
-                               this.saveToStorage();
+                                this.saveToStorage();
                             }
                         });
                     }
