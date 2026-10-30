@@ -674,506 +674,575 @@
         </div>
     </div>
 
-    <!-- LOGIC ỨNG DỤNG -->
+<!-- LOGIC ỨNG DỤNG -->
     <script>
-    function hrmApp() {
-        return {
-            isLoggedIn: localStorage.getItem('hrm_logged_in') === 'true',
-            role: localStorage.getItem('hrm_role') || 'staff',
-            currentUser: localStorage.getItem('hrm_current_user') || '',
-            loginType: 'staff',
-            adminForm: { username: '', password: '' },
-            selectedStaffName: '',
-            loginError: '',
-            newEmpName: '',
-            searchKeyword: '',
-            darkMode: localStorage.getItem('hrm_dark_mode') === 'true',
-            showPasswordModal: false,
-            pwdForm: { oldPwd: '', newPwd: '', confirmPwd: '' },
-            passwordMsg: '',
-            passwordError: false,
-            currentView: localStorage.getItem('hrm_role') === 'admin' ? 'table' : 'staffregister',
-            selectedTimelineDay: 't2',
-            currentWeekOffset: 0,
-            statsMonth: new Date().getMonth() + 1,
-            statsYear: new Date().getFullYear(),
-            showToast: false,
-            toastMessage: '',
-            toastTimeout: null,
-            activityLogs: [],
-            days: [
-                { key: 't2', name: 'Thứ 2' },
-                { key: 't3', name: 'Thứ 3' },
-                { key: 't4', name: 'Thứ 4' },
-                { key: 't5', name: 'Thứ 5' },
-                { key: 't6', name: 'Thứ 6' },
-                { key: 't7', name: 'Thứ 7' },
-                { key: 'cn', name: 'Chủ Nhật' }
-            ],
-            dayKeys: ['t2', 't3', 't4', 't5', 't6', 't7', 'cn'],
-            employees: [],
-            lockedWeeks: {},
-            allWeeksCache: {},
-            activeListeners: {},
+        // Hàm băm mật khẩu sang chuẩn SHA-256 kèm Salt bảo mật
+        async function hashPassword(password) {
+            const msgBuffer = new TextEncoder().encode(password + "_hrm_salt_2026");
+            const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
+            const hashArray = Array.from(new Uint8Array(hashBuffer));
+            return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+        }
 
-            triggerToast(message) {
-                this.toastMessage = message;
-                this.showToast = true;
-                if (this.toastTimeout) clearTimeout(this.toastTimeout);
-                this.toastTimeout = setTimeout(() => { this.showToast = false; }, 2800);
-            },
+        function hrmApp() {
+            return {
+                // Tách phiên Admin sang sessionStorage để tự hủy khi đóng trình duyệt
+                isLoggedIn: sessionStorage.getItem('hrm_admin_logged') === 'true' || localStorage.getItem('hrm_logged_in') === 'true',
+                role: sessionStorage.getItem('hrm_admin_logged') === 'true' ? 'admin' : (localStorage.getItem('hrm_role') || 'staff'),
+                currentUser: sessionStorage.getItem('hrm_admin_logged') === 'true' ? 'Admin' : (localStorage.getItem('hrm_current_user') || ''),
+                loginType: 'staff',
+                adminForm: { username: '', password: '' },
+                selectedStaffName: '',
+                loginError: '',
+                newEmpName: '',
+                searchKeyword: '',
+                darkMode: localStorage.getItem('hrm_dark_mode') === 'true',
 
-            logActivity(actionText) {
-                if (!window.db || !window.fbRef || !window.fbPush) return;
-                const logsRef = window.fbRef(window.db, 'hrm_smart_schedule_data/activity_logs');
-                const now = new Date();
-                const timeString = `${now.getDate().toString().padStart(2, '0')}/${(now.getMonth()+1).toString().padStart(2, '0')} ${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
-                window.fbPush(logsRef, {
-                    actor: this.currentUser || 'Hệ thống',
-                    action: actionText,
-                    timestamp: timeString
-                });
-            },
+                // Biến bảo mật Admin nâng cấp
+                adminPasswordHash: '',
+                failedAttempts: 0,
+                lockoutUntil: 0,
 
-            loadActivityLogs() {
-                if (!window.db || !window.fbRef || !window.fbOnValue) return;
-                const logsRef = window.fbRef(window.db, 'hrm_smart_schedule_data/activity_logs');
-                window.fbOnValue(logsRef, (snapshot) => {
-                    const data = snapshot.val();
-                    this.activityLogs = data ? Object.keys(data).map(key => ({ id: key, ...data[key] })) : [];
-                });
-            },
+                showPasswordModal: false,
+                pwdForm: { oldPwd: '', newPwd: '', confirmPwd: '' },
+                passwordMsg: '',
+                passwordError: false,
 
-            clearActivityLogs() {
-                if (confirm('Xóa toàn bộ lịch sử nhật ký hoạt động?')) {
-                    if (window.db && window.fbRef && window.fbSet) {
-                        window.fbSet(window.fbRef(window.db, 'hrm_smart_schedule_data/activity_logs'), null).then(() => {
-                            this.activityLogs = [];
-                            this.triggerToast('Đã dọn sạch nhật ký!');
-                        });
-                    }
-                }
-            },
+                currentView: sessionStorage.getItem('hrm_admin_logged') === 'true' ? 'table' : 'staffregister',
+                selectedTimelineDay: 't2',
+                currentWeekOffset: 0,
 
-            init() {
-                document.documentElement.classList.toggle('dark', this.darkMode);
-                const startFirebaseSync = () => {
-                    if (window.db && window.fbRef && window.fbOnValue) {
-                        const empRef = window.fbRef(window.db, 'hrm_smart_schedule_data/employees_list');
-                        window.fbOnValue(empRef, (snapshot) => {
-                            const data = snapshot.val();
-                            if (data) {
-                                const rawList = Array.isArray(data) ? data : Object.keys(data).map(key => ({ id: key, ...data[key] }));
-                                this.employees = rawList.filter(Boolean).map(emp => {
-                                    const existing = this.employees.find(e => e.id === emp.id);
-                                    return {
-                                        id: String(emp.id),
-                                        name: emp.name,
-                                        schedule: existing && existing.schedule ? existing.schedule : (emp.schedule || {})
-                                    };
-                                });
-                                this.loadCurrentWeekData();
-                            } else {
-                                this.employees = [
-                                    { id: '1', name: 'Ngọc Hào', schedule: {} },
-                                    { id: '2', name: 'Anh Bình', schedule: {} },
-                                    { id: '3', name: 'Anh Đĩnh', schedule: {} },
-                                    { id: '4', name: 'Anh Vũ', schedule: {} },
-                                    { id: '5', name: 'anh Chiến', schedule: {} },
-                                    { id: '6', name: 'Anh Tú', schedule: {} },
-                                    { id: '7', name: 'Anh Hậu', schedule: {} },
-                                    { id: '8', name: 'Trung', schedule: {} },
-                                    { id: '9', name: 'Anh Xuân Huy', schedule: {} },
-                                    { id: '10', name: 'Công', schedule: {} },
-                                    { id: '11', name: 'Phạm phong', schedule: {} },
-                                    { id: '12', name: 'Duy Anh', schedule: {} },
-                                    { id: '13', name: 'Anh Phong Gió', schedule: {} }
-                                ];
-                                this.saveEmployeesToStorage();
-                                this.loadCurrentWeekData();
-                            }
-                        });
-                        if (this.currentView === 'monthly') this.loadAllSchedulesForMonthlyStats();
-                        if (this.currentView === 'logs') this.loadActivityLogs();
-                    } else {
-                        setTimeout(startFirebaseSync, 100);
-                    }
-                };
-                startFirebaseSync();
-            },
+                statsMonth: new Date().getMonth() + 1,
+                statsYear: new Date().getFullYear(),
 
-            loadCurrentWeekData() {
-                if (!window.db || !window.fbRef) return;
-                const weekKey = this.currentWeekKey;
-                this.employees.forEach(emp => {
-                    if (!emp.schedule) emp.schedule = {};
-                    if (!emp.schedule[weekKey]) emp.schedule[weekKey] = window.getDefaultWeekSchedule();
-                });
-                if (this.activeListeners[weekKey]) {
-                    const cachedWeek = this.allWeeksCache[weekKey];
-                    if (cachedWeek) {
-                        this.employees.forEach(emp => {
-                            if (cachedWeek[emp.id]) emp.schedule[weekKey] = cachedWeek[emp.id];
-                        });
-                    }
-                    return;
-                }
-                this.activeListeners[weekKey] = true;
+                showToast: false,
+                toastMessage: '',
+                toastTimeout: null,
+                activityLogs: [],
 
-                const lockRef = window.fbRef(window.db, `hrm_smart_schedule_data/lockedWeeks/${weekKey}`);
-                window.fbOnValue(lockRef, (snapshot) => {
-                    this.lockedWeeks[weekKey] = snapshot.val() || false;
-                });
+                days: [
+                    { key: 't2', name: 'Thứ 2' },
+                    { key: 't3', name: 'Thứ 3' },
+                    { key: 't4', name: 'Thứ 4' },
+                    { key: 't5', name: 'Thứ 5' },
+                    { key: 't6', name: 'Thứ 6' },
+                    { key: 't7', name: 'Thứ 7' },
+                    { key: 'cn', name: 'Chủ Nhật' }
+                ],
+                dayKeys: ['t2', 't3', 't4', 't5', 't6', 't7', 'cn'],
+                employees: [],
+                lockedWeeks: {},
+                allWeeksCache: {},
+                activeListeners: {},
 
-                const weekRef = window.fbRef(window.db, `hrm_smart_schedule_data/schedules_by_week/${weekKey}`);
-                window.fbOnValue(weekRef, (snapshot) => {
-                    const weekData = snapshot.val();
-                    this.allWeeksCache[weekKey] = weekData || {};
-                    this.employees.forEach(emp => {
-                        if (!emp.schedule) emp.schedule = {};
-                        emp.schedule[weekKey] = (weekData && weekData[emp.id]) ? weekData[emp.id] : window.getDefaultWeekSchedule();
+                triggerToast(message) {
+                    this.toastMessage = message;
+                    this.showToast = true;
+                    if (this.toastTimeout) clearTimeout(this.toastTimeout);
+                    this.toastTimeout = setTimeout(() => { this.showToast = false; }, 2800);
+                },
+
+                logActivity(actionText) {
+                    if (!window.db || !window.fbRef || !window.fbPush) return;
+                    const logsRef = window.fbRef(window.db, 'hrm_smart_schedule_data/activity_logs');
+                    const now = new Date();
+                    const timeString = `${now.getDate().toString().padStart(2, '0')}/${(now.getMonth()+1).toString().padStart(2, '0')} ${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
+                    window.fbPush(logsRef, {
+                        actor: this.currentUser || 'Hệ thống',
+                        action: actionText,
+                        timestamp: timeString
                     });
-                });
-            },
+                },
 
-            loadAllSchedulesForMonthlyStats() {
-                if (!window.db || !window.fbRef || this.activeListeners['all_schedules']) return;
-                this.activeListeners['all_schedules'] = true;
-                const allSchedulesRef = window.fbRef(window.db, 'hrm_smart_schedule_data/schedules_by_week');
-                window.fbOnValue(allSchedulesRef, (snapshot) => {
-                    const allData = snapshot.val() || {};
-                    this.allWeeksCache = allData;
-                    Object.keys(allData).forEach(weekKey => {
-                        const weekData = allData[weekKey];
-                        this.employees.forEach(emp => {
-                            if (!emp.schedule) emp.schedule = {};
-                            if (weekData && weekData[emp.id]) emp.schedule[weekKey] = weekData[emp.id];
-                        });
+                loadActivityLogs() {
+                    if (!window.db || !window.fbRef || !window.fbOnValue) return;
+                    const logsRef = window.fbRef(window.db, 'hrm_smart_schedule_data/activity_logs');
+                    window.fbOnValue(logsRef, (snapshot) => {
+                        const data = snapshot.val();
+                        this.activityLogs = data ? Object.keys(data).map(key => ({ id: key, ...data[key] })) : [];
                     });
-                });
-            },
+                },
 
-            toggleDarkMode() {
-                this.darkMode = !this.darkMode;
-                localStorage.setItem('hrm_dark_mode', this.darkMode);
-                document.documentElement.classList.toggle('dark', this.darkMode);
-            },
-
-            get filteredEmployees() {
-                if (!this.searchKeyword.trim()) return this.employees;
-                let keyword = this.searchKeyword.toLowerCase().trim();
-                return this.employees.filter(e => e.name && e.name.toLowerCase().includes(keyword));
-            },
-
-            get currentWeekKey() {
-                let d = new Date();
-                d.setDate(d.getDate() + (this.currentWeekOffset * 7));
-                let day = d.getDay();
-                let diff = d.getDate() - day + (day === 0 ? -6 : 1);
-                let monday = new Date(d.setDate(diff));
-                let yyyy = monday.getFullYear();
-                let mm = String(monday.getMonth() + 1).padStart(2, '0');
-                let dd = String(monday.getDate()).padStart(2, '0');
-                return `${yyyy}-${mm}-${dd}`;
-            },
-
-            isCurrentWeekLocked() {
-                return !!this.lockedWeeks[this.currentWeekKey];
-            },
-
-            toggleLockWeek() {
-                const newStatus = !this.lockedWeeks[this.currentWeekKey];
-                this.lockedWeeks[this.currentWeekKey] = newStatus;
-                if (window.db && window.fbRef && window.fbSet) {
-                    window.fbSet(window.fbRef(window.db, `hrm_smart_schedule_data/lockedWeeks/${this.currentWeekKey}`), newStatus);
-                }
-                const msg = newStatus ? `Đã khóa lịch tuần ${this.currentWeekKey}` : `Đã mở khóa lịch tuần ${this.currentWeekKey}`;
-                this.triggerToast(msg);
-                this.logActivity(msg);
-            },
-
-            getWeekDisplayString() {
-                let parts = this.currentWeekKey.split('-');
-                let monday = new Date(parts[0], parts[1] - 1, parts[2]);
-                let sunday = new Date(monday);
-                sunday.setDate(monday.getDate() + 6);
-                const formatDate = (date) => `${String(date.getDate()).padStart(2, '0')}/${String(date.getMonth() + 1).padStart(2, '0')}/${date.getFullYear()}`;
-                return `${formatDate(monday)} - ${formatDate(sunday)}`;
-            },
-
-            getDateStringForDay(dKey) {
-                let parts = this.currentWeekKey.split('-');
-                let d = new Date(parts[0], parts[1] - 1, parts[2]);
-                d.setDate(d.getDate() + this.dayKeys.indexOf(dKey));
-                return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`;
-            },
-
-            changeWeek(direction) {
-                this.currentWeekOffset += direction;
-                this.loadCurrentWeekData();
-            },
-
-            resetToCurrentWeek() {
-                this.currentWeekOffset = 0;
-                this.loadCurrentWeekData();
-            },
-
-            getDayFullName(dKey) {
-                const found = this.days.find(d => d.key === dKey);
-                return found ? found.name : '';
-            },
-
-            getStaffsForShift(dKey, shiftName) {
-                let staffList = [];
-                this.employees.forEach(emp => {
-                    let weekSched = emp.schedule && emp.schedule[this.currentWeekKey];
-                    if (weekSched && weekSched[dKey] && weekSched[dKey][shiftName]) staffList.push(emp.name);
-                });
-                return staffList;
-            },
-
-            get currentStaffData() {
-                return this.employees.find(e => e.name === this.currentUser);
-            },
-
-            getEmpTotalShifts(emp) {
-                if (!emp || !emp.schedule || !emp.schedule[this.currentWeekKey]) return 0;
-                let total = 0;
-                this.dayKeys.forEach(dKey => {
-                    let daySched = emp.schedule[this.currentWeekKey][dKey];
-                    if (daySched) {
-                        if (daySched.ca1) total++;
-                        if (daySched.ca2) total++;
-                        if (daySched.ca3) total++;
-                    }
-                });
-                return total;
-            },
-
-            getTotalAssignedShifts() {
-                return this.employees.reduce((sum, emp) => sum + this.getEmpTotalShifts(emp), 0);
-            },
-
-            getMonthlyStatsForEmp(emp) {
-                let stats = { ca1: 0, ca2: 0, ca3: 0, total: 0 };
-                if (!emp || !emp.schedule) return stats;
-                Object.keys(emp.schedule).forEach(mondayKey => {
-                    let parts = mondayKey.split('-');
-                    if (parts.length !== 3) return;
-                    let mondayDate = new Date(parts[0], parts[1] - 1, parts[2]);
-                    let weekData = emp.schedule[mondayKey];
-                    if (!weekData) return;
-                    for (let i = 0; i < 7; i++) {
-                        let currDate = new Date(mondayDate);
-                        currDate.setDate(mondayDate.getDate() + i);
-                        if (currDate.getMonth() + 1 === parseInt(this.statsMonth) && currDate.getFullYear() === parseInt(this.statsYear)) {
-                            let daySched = weekData[this.dayKeys[i]];
-                            if (daySched) {
-                                if (daySched.ca1) { stats.ca1++; stats.total++; }
-                                if (daySched.ca2) { stats.ca2++; stats.total++; }
-                                if (daySched.ca3) { stats.ca3++; stats.total++; }
-                            }
+                clearActivityLogs() {
+                    if (confirm('Xóa toàn bộ lịch sử nhật ký hoạt động?')) {
+                        if (window.db && window.fbRef && window.fbSet) {
+                            window.fbSet(window.fbRef(window.db, 'hrm_smart_schedule_data/activity_logs'), null).then(() => {
+                                this.activityLogs = [];
+                                this.triggerToast('Đã dọn sạch nhật ký!');
+                            });
                         }
                     }
-                });
-                return stats;
-            },
+                },
 
-            getPeakDayName() {
-                let maxCount = -1, peakDay = 'Chưa có';
-                this.days.forEach(day => {
-                    let count = this.getStaffsForShift(day.key, 'ca1').length +
-                                this.getStaffsForShift(day.key, 'ca2').length +
-                                this.getStaffsForShift(day.key, 'ca3').length;
-                    if (count > maxCount) { maxCount = count; peakDay = day.name; }
-                });
-                return maxCount > 0 ? `${peakDay} (${maxCount} ca)` : 'Chưa có';
-            },
+                init() {
+                    document.documentElement.classList.toggle('dark', this.darkMode);
+                    const startFirebaseSync = () => {
+                        if (window.db && window.fbRef && window.fbOnValue) {
+                            // 1. Đồng bộ mã băm mật khẩu Admin từ Firebase
+                            const pwdRef = window.fbRef(window.db, 'hrm_smart_schedule_data/admin_config/password_hash');
+                            window.fbOnValue(pwdRef, async (snapshot) => {
+                                if (snapshot.exists()) {
+                                    this.adminPasswordHash = snapshot.val();
+                                } else {
+                                    const defaultHash = await hashPassword('admin123');
+                                    this.adminPasswordHash = defaultHash;
+                                    if (window.fbSet) window.fbSet(pwdRef, defaultHash);
+                                }
+                            });
 
-            toggleFullEmp(emp, status) {
-                if (!emp) return;
-                if (this.isCurrentWeekLocked() && this.role === 'staff') {
-                    alert('Tuần này đã bị khóa lịch!');
-                    return;
-                }
-                if (!emp.schedule[this.currentWeekKey]) emp.schedule[this.currentWeekKey] = window.getDefaultWeekSchedule();
-                this.dayKeys.forEach(dKey => {
-                    emp.schedule[this.currentWeekKey][dKey].ca1 = status;
-                    emp.schedule[this.currentWeekKey][dKey].ca2 = status;
-                    emp.schedule[this.currentWeekKey][dKey].ca3 = status;
-                });
-                this.saveEmpSchedule(emp);
-            },
+                            // 2. Đồng bộ danh sách nhân sự
+                            const empRef = window.fbRef(window.db, 'hrm_smart_schedule_data/employees_list');
+                            window.fbOnValue(empRef, (snapshot) => {
+                                const data = snapshot.val();
+                                if (data) {
+                                    const rawList = Array.isArray(data) ? data : Object.keys(data).map(key => ({ id: key, ...data[key] }));
+                                    this.employees = rawList.filter(Boolean).map(emp => {
+                                        const existing = this.employees.find(e => e.id === emp.id);
+                                        return {
+                                            id: String(emp.id),
+                                            name: emp.name,
+                                            schedule: existing && existing.schedule ? existing.schedule : (emp.schedule || {})
+                                        };
+                                    });
+                                    this.loadCurrentWeekData();
+                                } else {
+                                    this.employees = [
+                                        { id: '1', name: 'Ngọc Hào', schedule: {} },
+                                        { id: '2', name: 'Anh Bình', schedule: {} },
+                                        { id: '3', name: 'Anh Đĩnh', schedule: {} },
+                                        { id: '4', name: 'Anh Vũ', schedule: {} },
+                                        { id: '5', name: 'anh Chiến', schedule: {} },
+                                        { id: '6', name: 'Anh Tú', schedule: {} },
+                                        { id: '7', name: 'Anh Hậu', schedule: {} },
+                                        { id: '8', name: 'Trung', schedule: {} },
+                                        { id: '9', name: 'Anh Xuân Huy', schedule: {} },
+                                        { id: '10', name: 'Công', schedule: {} },
+                                        { id: '11', name: 'Phạm phong', schedule: {} },
+                                        { id: '12', name: 'Duy Anh', schedule: {} },
+                                        { id: '13', name: 'Anh Phong Gió', schedule: {} }
+                                    ];
+                                    this.saveEmployeesToStorage();
+                                    this.loadCurrentWeekData();
+                                }
+                            });
+                            if (this.currentView === 'monthly') this.loadAllSchedulesForMonthlyStats();
+                            if (this.currentView === 'logs') this.loadActivityLogs();
+                        } else {
+                            setTimeout(startFirebaseSync, 100);
+                        }
+                    };
+                    startFirebaseSync();
+                },
 
-            handleAdminLogin() {
-                const currentPwd = localStorage.getItem('hrm_admin_password') || 'admin123';
-                if (this.adminForm.username === 'admin' && this.adminForm.password === currentPwd) {
-                    this.isLoggedIn = true;
-                    this.role = 'admin';
-                    this.currentUser = 'Admin';
-                    this.currentView = 'table';
-                    localStorage.setItem('hrm_logged_in', 'true');
-                    localStorage.setItem('hrm_role', 'admin');
-                    localStorage.setItem('hrm_current_user', 'Admin');
-                    this.loginError = '';
-                    this.triggerToast('Chào mừng Quản trị viên!');
-                } else {
-                    this.loginError = 'Tài khoản hoặc mật khẩu không chính xác!';
-                }
-            },
-
-            handleStaffLogin() {
-                if (!this.selectedStaffName) {
-                    this.loginError = 'Vui lòng chọn tên của bạn!';
-                    return;
-                }
-                this.isLoggedIn = true;
-                this.role = 'staff';
-                this.currentUser = this.selectedStaffName;
-                this.currentView = 'staffregister';
-                localStorage.setItem('hrm_logged_in', 'true');
-                localStorage.setItem('hrm_role', 'staff');
-                localStorage.setItem('hrm_current_user', this.selectedStaffName);
-                this.loginError = '';
-                this.triggerToast(`Xin chào ${this.currentUser}!`);
-            },
-
-            changeAdminPassword() {
-                const currentPwd = localStorage.getItem('hrm_admin_password') || 'admin123';
-                if (this.pwdForm.oldPwd !== currentPwd) {
-                    this.passwordError = true; this.passwordMsg = 'Mật khẩu cũ không đúng!'; return;
-                }
-                if (!this.pwdForm.newPwd || this.pwdForm.newPwd.length < 6) {
-                    this.passwordError = true; this.passwordMsg = 'Mật khẩu mới tối thiểu 6 ký tự!'; return;
-                }
-                if (this.pwdForm.newPwd !== this.pwdForm.confirmPwd) {
-                    this.passwordError = true; this.passwordMsg = 'Xác nhận mật khẩu không khớp!'; return;
-                }
-                localStorage.setItem('hrm_admin_password', this.pwdForm.newPwd);
-                this.passwordError = false;
-                this.passwordMsg = 'Đã cập nhật mật khẩu!';
-                this.pwdForm = { oldPwd: '', newPwd: '', confirmPwd: '' };
-                setTimeout(() => { this.showPasswordModal = false; this.passwordMsg = ''; }, 1200);
-            },
-
-            logout() {
-                this.isLoggedIn = false;
-                this.adminForm = { username: '', password: '' };
-                this.selectedStaffName = '';
-                localStorage.removeItem('hrm_logged_in');
-                localStorage.removeItem('hrm_role');
-                localStorage.removeItem('hrm_current_user');
-            },
-
-            addEmployee() {
-                if (!this.newEmpName.trim()) return;
-                const newId = 'emp_' + Date.now();
-                const addedName = this.newEmpName.trim();
-                const newEmp = { id: newId, name: addedName, schedule: {} };
-                newEmp.schedule[this.currentWeekKey] = window.getDefaultWeekSchedule();
-                this.employees.push(newEmp);
-                this.newEmpName = '';
-                this.saveEmployeesToStorage();
-                this.triggerToast(`Đã thêm ${addedName}!`);
-                this.logActivity(`Thêm nhân sự mới: ${addedName}`);
-            },
-
-            deleteEmployee(id) {
-                const target = this.employees.find(e => e.id === id);
-                if (confirm(`Xóa nhân sự "${target ? target.name : ''}" khỏi hệ thống?`)) {
-                    this.employees = this.employees.filter(e => e.id !== id);
-                    this.saveEmployeesToStorage();
-                    this.triggerToast('Đã xóa nhân sự!');
-                    this.logActivity(`Xóa nhân sự: ${target ? target.name : id}`);
-                }
-            },
-
-            clearAllShifts() {
-                if (this.isCurrentWeekLocked()) { alert('Tuần này đang khóa!'); return; }
-                if (confirm('Xóa trắng toàn bộ ca trực của tuần này?')) {
+                loadCurrentWeekData() {
+                    if (!window.db || !window.fbRef) return;
+                    const weekKey = this.currentWeekKey;
                     this.employees.forEach(emp => {
                         if (!emp.schedule) emp.schedule = {};
-                        emp.schedule[this.currentWeekKey] = window.getDefaultWeekSchedule(false);
+                        if (!emp.schedule[weekKey]) emp.schedule[weekKey] = window.getDefaultWeekSchedule();
                     });
-                    this.saveToStorage();
-                    this.triggerToast('Đã xóa trắng ca tuần này!');
-                }
-            },
-
-            saveEmployeesToStorage() {
-                if (window.db && window.fbRef && window.fbSet) {
-                    const cleanList = this.employees.map(emp => ({ id: emp.id, name: emp.name }));
-                    window.fbSet(window.fbRef(window.db, 'hrm_smart_schedule_data/employees_list'), cleanList);
-                }
-            },
-
-            saveEmpSchedule(emp) {
-                if (!emp) return;
-                if (this.isCurrentWeekLocked() && this.role === 'staff') {
-                    alert('Lịch tuần này đã khóa!'); return;
-                }
-                if (window.db && window.fbRef && window.fbSet) {
-                    const empWeekRef = window.fbRef(window.db, `hrm_smart_schedule_data/schedules_by_week/${this.currentWeekKey}/${emp.id}`);
-                    window.fbSet(empWeekRef, emp.schedule[this.currentWeekKey]).then(() => {
-                        this.triggerToast(`Đã lưu lịch của ${emp.name}!`);
-                        this.logActivity(`Cập nhật ca trực của ${emp.name} (Tuần ${this.currentWeekKey})`);
+                    if (this.activeListeners[weekKey]) {
+                        const cachedWeek = this.allWeeksCache[weekKey];
+                        if (cachedWeek) {
+                            this.employees.forEach(emp => {
+                                if (cachedWeek[emp.id]) emp.schedule[weekKey] = cachedWeek[emp.id];
+                            });
+                        }
+                        return;
+                    }
+                    this.activeListeners[weekKey] = true;
+                    const lockRef = window.fbRef(window.db, `hrm_smart_schedule_data/lockedWeeks/${weekKey}`);
+                    window.fbOnValue(lockRef, (snapshot) => {
+                        this.lockedWeeks[weekKey] = snapshot.val() || false;
                     });
+                    const weekRef = window.fbRef(window.db, `hrm_smart_schedule_data/schedules_by_week/${weekKey}`);
+                    window.fbOnValue(weekRef, (snapshot) => {
+                        const weekData = snapshot.val();
+                        this.allWeeksCache[weekKey] = weekData || {};
+                        this.employees.forEach(emp => {
+                            if (!emp.schedule) emp.schedule = {};
+                            emp.schedule[weekKey] = (weekData && weekData[emp.id]) ? weekData[emp.id] : window.getDefaultWeekSchedule();
+                        });
+                    });
+                },
+
+                loadAllSchedulesForMonthlyStats() {
+                    if (!window.db || !window.fbRef || this.activeListeners['all_schedules']) return;
+                    this.activeListeners['all_schedules'] = true;
+                    const allSchedulesRef = window.fbRef(window.db, 'hrm_smart_schedule_data/schedules_by_week');
+                    window.fbOnValue(allSchedulesRef, (snapshot) => {
+                        const allData = snapshot.val() || {};
+                        this.allWeeksCache = allData;
+                        Object.keys(allData).forEach(weekKey => {
+                            const weekData = allData[weekKey];
+                            this.employees.forEach(emp => {
+                                if (!emp.schedule) emp.schedule = {};
+                                if (weekData && weekData[emp.id]) emp.schedule[weekKey] = weekData[emp.id];
+                            });
+                        });
+                    });
+                },
+
+                toggleDarkMode() {
+                    this.darkMode = !this.darkMode;
+                    localStorage.setItem('hrm_dark_mode', this.darkMode);
+                    document.documentElement.classList.toggle('dark', this.darkMode);
+                },
+
+                get filteredEmployees() {
+                    if (!this.searchKeyword.trim()) return this.employees;
+                    let keyword = this.searchKeyword.toLowerCase().trim();
+                    return this.employees.filter(e => e.name && e.name.toLowerCase().includes(keyword));
+                },
+
+                get currentWeekKey() {
+                    let d = new Date();
+                    d.setDate(d.getDate() + (this.currentWeekOffset * 7));
+                    let day = d.getDay();
+                    let diff = d.getDate() - day + (day === 0 ? -6 : 1);
+                    let monday = new Date(d.setDate(diff));
+                    let yyyy = monday.getFullYear();
+                    let mm = String(monday.getMonth() + 1).padStart(2, '0');
+                    let dd = String(monday.getDate()).padStart(2, '0');
+                    return `${yyyy}-${mm}-${dd}`;
+                },
+
+                isCurrentWeekLocked() {
+                    return !!this.lockedWeeks[this.currentWeekKey];
+                },
+
+                toggleLockWeek() {
+                    const newStatus = !this.lockedWeeks[this.currentWeekKey];
+                    this.lockedWeeks[this.currentWeekKey] = newStatus;
+                    if (window.db && window.fbRef && window.fbSet) {
+                        window.fbSet(window.fbRef(window.db, `hrm_smart_schedule_data/lockedWeeks/${this.currentWeekKey}`), newStatus);
+                    }
+                    const msg = newStatus ? `Đã khóa lịch tuần ${this.currentWeekKey}` : `Đã mở khóa lịch tuần ${this.currentWeekKey}`;
+                    this.triggerToast(msg);
+                    this.logActivity(msg);
+                },
+
+                getWeekDisplayString() {
+                    let parts = this.currentWeekKey.split('-');
+                    let monday = new Date(parts[0], parts[1] - 1, parts[2]);
+                    let sunday = new Date(monday);
+                    sunday.setDate(monday.getDate() + 6);
+                    const formatDate = (date) => `${String(date.getDate()).padStart(2, '0')}/${String(date.getMonth() + 1).padStart(2, '0')}/${date.getFullYear()}`;
+                    return `${formatDate(monday)} - ${formatDate(sunday)}`;
+                },
+
+                getDateStringForDay(dKey) {
+                    let parts = this.currentWeekKey.split('-');
+                    let d = new Date(parts[0], parts[1] - 1, parts[2]);
+                    d.setDate(d.getDate() + this.dayKeys.indexOf(dKey));
+                    return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`;
+                },
+
+                changeWeek(direction) {
+                    this.currentWeekOffset += direction;
+                    this.loadCurrentWeekData();
+                },
+
+                resetToCurrentWeek() {
+                    this.currentWeekOffset = 0;
+                    this.loadCurrentWeekData();
+                },
+
+                getDayFullName(dKey) {
+                    const found = this.days.find(d => d.key === dKey);
+                    return found ? found.name : '';
+                },
+
+                getStaffsForShift(dKey, shiftName) {
+                    let staffList = [];
+                    this.employees.forEach(emp => {
+                        let weekSched = emp.schedule && emp.schedule[this.currentWeekKey];
+                        if (weekSched && weekSched[dKey] && weekSched[dKey][shiftName]) staffList.push(emp.name);
+                    });
+                    return staffList;
+                },
+
+                get currentStaffData() {
+                    return this.employees.find(e => e.name === this.currentUser);
+                },
+
+                getEmpTotalShifts(emp) {
+                    if (!emp || !emp.schedule || !emp.schedule[this.currentWeekKey]) return 0;
+                    let total = 0;
+                    this.dayKeys.forEach(dKey => {
+                        let daySched = emp.schedule[this.currentWeekKey][dKey];
+                        if (daySched) {
+                            if (daySched.ca1) total++;
+                            if (daySched.ca2) total++;
+                            if (daySched.ca3) total++;
+                        }
+                    });
+                    return total;
+                },
+
+                getTotalAssignedShifts() {
+                    return this.employees.reduce((sum, emp) => sum + this.getEmpTotalShifts(emp), 0);
+                },
+
+                getMonthlyStatsForEmp(emp) {
+                    let stats = { ca1: 0, ca2: 0, ca3: 0, total: 0 };
+                    if (!emp || !emp.schedule) return stats;
+                    Object.keys(emp.schedule).forEach(mondayKey => {
+                        let parts = mondayKey.split('-');
+                        if (parts.length !== 3) return;
+                        let mondayDate = new Date(parts[0], parts[1] - 1, parts[2]);
+                        let weekData = emp.schedule[mondayKey];
+                        if (!weekData) return;
+                        for (let i = 0; i < 7; i++) {
+                            let currDate = new Date(mondayDate);
+                            currDate.setDate(mondayDate.getDate() + i);
+                            if (currDate.getMonth() + 1 === parseInt(this.statsMonth) && currDate.getFullYear() === parseInt(this.statsYear)) {
+                                let daySched = weekData[this.dayKeys[i]];
+                                if (daySched) {
+                                    if (daySched.ca1) { stats.ca1++; stats.total++; }
+                                    if (daySched.ca2) { stats.ca2++; stats.total++; }
+                                    if (daySched.ca3) { stats.ca3++; stats.total++; }
+                                }
+                            }
+                        }
+                    });
+                    return stats;
+                },
+
+                getPeakDayName() {
+                    let maxCount = -1, peakDay = 'Chưa có';
+                    this.days.forEach(day => {
+                        let count = this.getStaffsForShift(day.key, 'ca1').length + this.getStaffsForShift(day.key, 'ca2').length + this.getStaffsForShift(day.key, 'ca3').length;
+                        if (count > maxCount) { maxCount = count; peakDay = day.name; }
+                    });
+                    return maxCount > 0 ? `${peakDay} (${maxCount} ca)` : 'Chưa có';
+                },
+
+                toggleFullEmp(emp, status) {
+                    if (!emp) return;
+                    if (this.isCurrentWeekLocked() && this.role === 'staff') {
+                        alert('Tuần này đã bị khóa lịch!');
+                        return;
+                    }
+                    if (!emp.schedule[this.currentWeekKey]) emp.schedule[this.currentWeekKey] = window.getDefaultWeekSchedule();
+                    this.dayKeys.forEach(dKey => {
+                        emp.schedule[this.currentWeekKey][dKey].ca1 = status;
+                        emp.schedule[this.currentWeekKey][dKey].ca2 = status;
+                        emp.schedule[this.currentWeekKey][dKey].ca3 = status;
+                    });
+                    this.saveEmpSchedule(emp);
+                },
+
+                async handleAdminLogin() {
+                    if (Date.now() < this.lockoutUntil) {
+                        const waitSec = Math.ceil((this.lockoutUntil - Date.now()) / 1000);
+                        this.loginError = `Tạm khóa đăng nhập! Vui lòng thử lại sau ${waitSec} giây.`;
+                        return;
+                    }
+
+                    const inputHash = await hashPassword(this.adminForm.password);
+                    const targetHash = this.adminPasswordHash || await hashPassword('admin123');
+
+                    if (this.adminForm.username.trim() === 'admin' && inputHash === targetHash) {
+                        this.isLoggedIn = true;
+                        this.role = 'admin';
+                        this.currentUser = 'Admin';
+                        this.currentView = 'table';
+                        this.failedAttempts = 0;
+
+                        sessionStorage.setItem('hrm_admin_logged', 'true');
+                        localStorage.removeItem('hrm_admin_password');
+                        localStorage.removeItem('hrm_logged_in');
+                        localStorage.removeItem('hrm_role');
+                        localStorage.removeItem('hrm_current_user');
+
+                        this.loginError = '';
+                        this.adminForm.password = '';
+                        this.triggerToast('Chào mừng Quản trị viên!');
+                        this.logActivity('Quản trị viên đăng nhập hệ thống');
+                    } else {
+                        this.failedAttempts++;
+                        if (this.failedAttempts >= 5) {
+                            this.lockoutUntil = Date.now() + 60000;
+                            this.loginError = 'Nhập sai quá 5 lần! Tạm khóa 60 giây.';
+                        } else {
+                            this.loginError = `Tài khoản hoặc mật khẩu không chính xác! (Còn ${5 - this.failedAttempts} lần thử)`;
+                        }
+                    }
+                },
+
+                handleStaffLogin() {
+                    if (!this.selectedStaffName) {
+                        this.loginError = 'Vui lòng chọn tên của bạn!';
+                        return;
+                    }
+                    this.isLoggedIn = true;
+                    this.role = 'staff';
+                    this.currentUser = this.selectedStaffName;
+                    this.currentView = 'staffregister';
+                    sessionStorage.removeItem('hrm_admin_logged');
+                    localStorage.setItem('hrm_logged_in', 'true');
+                    localStorage.setItem('hrm_role', 'staff');
+                    localStorage.setItem('hrm_current_user', this.selectedStaffName);
+                    this.loginError = '';
+                    this.triggerToast(`Xin chào ${this.currentUser}!`);
+                },
+
+                async changeAdminPassword() {
+                    const oldInputHash = await hashPassword(this.pwdForm.oldPwd);
+                    const currentHash = this.adminPasswordHash || await hashPassword('admin123');
+
+                    if (oldInputHash !== currentHash) {
+                        this.passwordError = true;
+                        this.passwordMsg = 'Mật khẩu hiện tại không đúng!';
+                        return;
+                    }
+                    if (!this.pwdForm.newPwd || this.pwdForm.newPwd.length < 6) {
+                        this.passwordError = true;
+                        this.passwordMsg = 'Mật khẩu mới tối thiểu 6 ký tự!';
+                        return;
+                    }
+                    if (this.pwdForm.newPwd !== this.pwdForm.confirmPwd) {
+                        this.passwordError = true;
+                        this.passwordMsg = 'Xác nhận mật khẩu không khớp!';
+                        return;
+                    }
+
+                    const newHash = await hashPassword(this.pwdForm.newPwd);
+                    if (window.db && window.fbRef && window.fbSet) {
+                        const pwdRef = window.fbRef(window.db, 'hrm_smart_schedule_data/admin_config/password_hash');
+                        await window.fbSet(pwdRef, newHash);
+                    }
+
+                    this.adminPasswordHash = newHash;
+                    localStorage.removeItem('hrm_admin_password');
+                    this.passwordError = false;
+                    this.passwordMsg = 'Đã mã hóa & cập nhật mật khẩu!';
+                    this.pwdForm = { oldPwd: '', newPwd: '', confirmPwd: '' };
+                    this.logActivity('Quản trị viên đã thay đổi mật khẩu bảo mật');
+                    setTimeout(() => { this.showPasswordModal = false; this.passwordMsg = ''; }, 1200);
+                },
+
+                logout() {
+                    this.isLoggedIn = false;
+                    this.adminForm = { username: '', password: '' };
+                    this.selectedStaffName = '';
+                    sessionStorage.removeItem('hrm_admin_logged');
+                    localStorage.removeItem('hrm_logged_in');
+                    localStorage.removeItem('hrm_role');
+                    localStorage.removeItem('hrm_current_user');
+                },
+
+                addEmployee() {
+                    if (!this.newEmpName.trim()) return;
+                    const newId = 'emp_' + Date.now();
+                    const addedName = this.newEmpName.trim();
+                    const newEmp = { id: newId, name: addedName, schedule: {} };
+                    newEmp.schedule[this.currentWeekKey] = window.getDefaultWeekSchedule();
+                    this.employees.push(newEmp);
+                    this.newEmpName = '';
+                    this.saveEmployeesToStorage();
+                    this.triggerToast(`Đã thêm ${addedName}!`);
+                    this.logActivity(`Thêm nhân sự mới: ${addedName}`);
+                },
+
+                deleteEmployee(id) {
+                    const target = this.employees.find(e => e.id === id);
+                    if (confirm(`Xóa nhân sự "${target ? target.name : ''}" khỏi hệ thống?`)) {
+                        this.employees = this.employees.filter(e => e.id !== id);
+                        this.saveEmployeesToStorage();
+                        this.triggerToast('Đã xóa nhân sự!');
+                        this.logActivity(`Xóa nhân sự: ${target ? target.name : id}`);
+                    }
+                },
+
+                clearAllShifts() {
+                    if (this.isCurrentWeekLocked()) { alert('Tuần này đang khóa!'); return; }
+                    if (confirm('Xóa trắng toàn bộ ca trực của tuần này?')) {
+                        this.employees.forEach(emp => {
+                            if (!emp.schedule) emp.schedule = {};
+                            emp.schedule[this.currentWeekKey] = window.getDefaultWeekSchedule(false);
+                        });
+                        this.saveToStorage();
+                        this.triggerToast('Đã xóa trắng ca tuần này!');
+                    }
+                },
+
+                saveEmployeesToStorage() {
+                    if (window.db && window.fbRef && window.fbSet) {
+                        const cleanList = this.employees.map(emp => ({ id: emp.id, name: emp.name }));
+                        window.fbSet(window.fbRef(window.db, 'hrm_smart_schedule_data/employees_list'), cleanList);
+                    }
+                },
+
+                saveEmpSchedule(emp) {
+                    if (!emp) return;
+                    if (this.isCurrentWeekLocked() && this.role === 'staff') {
+                        alert('Lịch tuần này đã khóa!');
+                        return;
+                    }
+                    if (window.db && window.fbRef && window.fbSet) {
+                        const empWeekRef = window.fbRef(window.db, `hrm_smart_schedule_data/schedules_by_week/${this.currentWeekKey}/${emp.id}`);
+                        window.fbSet(empWeekRef, emp.schedule[this.currentWeekKey]).then(() => {
+                            this.triggerToast(`Đã lưu lịch của ${emp.name}!`);
+                            this.logActivity(`Cập nhật ca trực của ${emp.name} (Tuần ${this.currentWeekKey})`);
+                        });
+                    }
+                },
+
+                saveToStorage() {
+                    let currentWeekScheduleData = {};
+                    this.employees.forEach(emp => {
+                        currentWeekScheduleData[emp.id] = emp.schedule[this.currentWeekKey] || window.getDefaultWeekSchedule();
+                    });
+                    if (window.db && window.fbRef && window.fbSet) {
+                        window.fbSet(window.fbRef(window.db, `hrm_smart_schedule_data/schedules_by_week/${this.currentWeekKey}`), currentWeekScheduleData);
+                    }
+                },
+
+                exportDailyReportWord(dKey) {
+                    let dayName = this.getDayFullName(dKey);
+                    let dateStr = this.getDateStringForDay(dKey);
+                    let ca1List = this.getStaffsForShift(dKey, 'ca1');
+                    let ca2List = this.getStaffsForShift(dKey, 'ca2');
+                    let ca3List = this.getStaffsForShift(dKey, 'ca3');
+                    let htmlContent = `<html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'><head><meta charset='utf-8'><style>body{font-family:'Times New Roman';font-size:14pt;}table{border-collapse:collapse;width:100%;}th,td{border:1px solid black;padding:8px;vertical-align:top;}</style></head><body><table><tr style="background:#f2f2f2;"><td style="text-align:center;font-weight:bold;">Ca</td><td style="font-weight:bold;">${dayName} (${dateStr})</td><td>Ghi chú</td></tr><tr><td style="text-align:center;font-weight:bold;">1</td><td>${ca1List.map((n,i)=>`${i+1}. ${n}`).join('<br>')||'<em>Trống</em>'}</td><td></td></tr><tr><td style="text-align:center;font-weight:bold;">2</td><td>${ca2List.map((n,i)=>`${i+1}. ${n}`).join('<br>')||'<em>Trống</em>'}</td><td><span style="color:red;">Trực trưa: ${ca2List.slice(0,2).join(', ')}</span><br><br><span style="color:red;">Trực tối: ${ca3List.slice(0,2).join(', ')}</span></td></tr><tr><td style="text-align:center;font-weight:bold;">3</td><td>${ca3List.map((n,i)=>`${i+1}. ${n}`).join('<br>')||'<em>Trống</em>'}</td><td></td></tr></table></body></html>`;
+                    let blob = new Blob(['\ufeff' + htmlContent], { type: 'application/msword' });
+                    let a = document.createElement('a');
+                    a.href = URL.createObjectURL(blob);
+                    a.download = `BaoCao_${dayName}_${dateStr.replace('/', '-')}.doc`;
+                    a.click();
+                    this.triggerToast('Đã tải xuống file Word!');
+                },
+
+                exportWeeklyReportWord() {
+                    let weekStr = this.getWeekDisplayString();
+                    let daysHtml = '';
+                    this.days.forEach(day => {
+                        let dateStr = this.getDateStringForDay(day.key);
+                        let ca1List = this.getStaffsForShift(day.key, 'ca1');
+                        let ca2List = this.getStaffsForShift(day.key, 'ca2');
+                        let ca3List = this.getStaffsForShift(day.key, 'ca3');
+                        daysHtml += `<h3>${day.name} (${dateStr})</h3><table><tr style="background:#f2f2f2;"><td style="text-align:center;font-weight:bold;">Ca</td><td style="font-weight:bold;">Nhân sự</td><td>Ghi chú</td></tr><tr><td style="text-align:center;font-weight:bold;">1</td><td>${ca1List.map((n,i)=>`${i+1}. ${n}`).join('<br>')||'<em>Trống</em>'}</td><td></td></tr><tr><td style="text-align:center;font-weight:bold;">2</td><td>${ca2List.map((n,i)=>`${i+1}. ${n}`).join('<br>')||'<em>Trống</em>'}</td><td><span style="color:red;">Trực trưa: ${ca2List.slice(0,2).join(', ')}</span><br><br><span style="color:red;">Trực tối: ${ca3List.slice(0,2).join(', ')}</span></td></tr><tr><td style="text-align:center;font-weight:bold;">3</td><td>${ca3List.map((n,i)=>`${i+1}. ${n}`).join('<br>')||'<em>Trống</em>'}</td><td></td></tr></table><br>`;
+                    });
+                    let htmlContent = `<html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'><head><meta charset='utf-8'><style>body{font-family:'Times New Roman';font-size:14pt;}table{border-collapse:collapse;width:100%;}th,td{border:1px solid black;padding:6px;vertical-align:top;}</style></head><body><h2 style="text-align:center;">BÁO CÁO LỊCH TRỰC TUẦN (${weekStr})</h2><hr>${daysHtml}</body></html>`;
+                    let blob = new Blob(['\ufeff' + htmlContent], { type: 'application/msword' });
+                    let a = document.createElement('a');
+                    a.href = URL.createObjectURL(blob);
+                    a.download = `BaoCao_Tuan_${this.currentWeekKey}.doc`;
+                    a.click();
+                    this.triggerToast('Đã tải xuống Word cả tuần!');
                 }
-            },
-
-            saveToStorage() {
-                let currentWeekScheduleData = {};
-                this.employees.forEach(emp => {
-                    currentWeekScheduleData[emp.id] = emp.schedule[this.currentWeekKey] || window.getDefaultWeekSchedule();
-                });
-                if (window.db && window.fbRef && window.fbSet) {
-                    window.fbSet(window.fbRef(window.db, `hrm_smart_schedule_data/schedules_by_week/${this.currentWeekKey}`), currentWeekScheduleData);
-                }
-            },
-
-            exportDailyReportWord(dKey) {
-                let dayName = this.getDayFullName(dKey);
-                let dateStr = this.getDateStringForDay(dKey);
-                let ca1List = this.getStaffsForShift(dKey, 'ca1');
-                let ca2List = this.getStaffsForShift(dKey, 'ca2');
-                let ca3List = this.getStaffsForShift(dKey, 'ca3');
-                let htmlContent = `<html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'><head><meta charset='utf-8'><style>body{font-family:'Times New Roman';font-size:14pt;}table{border-collapse:collapse;width:100%;}th,td{border:1px solid black;padding:8px;vertical-align:top;}</style></head><body><table><tr style="background:#f2f2f2;"><td style="text-align:center;font-weight:bold;">Ca</td><td style="font-weight:bold;">${dayName} (${dateStr})</td><td>Ghi chú</td></tr><tr><td style="text-align:center;font-weight:bold;">1</td><td>${ca1List.map((n,i)=>`${i+1}. ${n}`).join('<br>')||'<em>Trống</em>'}</td><td></td></tr><tr><td style="text-align:center;font-weight:bold;">2</td><td>${ca2List.map((n,i)=>`${i+1}. ${n}`).join('<br>')||'<em>Trống</em>'}</td><td><span style="color:red;">Trực trưa: ${ca2List.slice(0,2).join(', ')}</span><br><br><span style="color:red;">Trực tối: ${ca3List.slice(0,2).join(', ')}</span></td></tr><tr><td style="text-align:center;font-weight:bold;">3</td><td>${ca3List.map((n,i)=>`${i+1}. ${n}`).join('<br>')||'<em>Trống</em>'}</td><td></td></tr></table></body></html>`;
-                let blob = new Blob(['\ufeff' + htmlContent], { type: 'application/msword' });
-                let a = document.createElement('a');
-                a.href = URL.createObjectURL(blob);
-                a.download = `BaoCao_${dayName}_${dateStr.replace('/', '-')}.doc`;
-                a.click();
-                this.triggerToast('Đã tải xuống file Word!');
-            },
-
-            exportWeeklyReportWord() {
-                let weekStr = this.getWeekDisplayString();
-                let daysHtml = '';
-                this.days.forEach(day => {
-                    let dateStr = this.getDateStringForDay(day.key);
-                    let ca1List = this.getStaffsForShift(day.key, 'ca1');
-                    let ca2List = this.getStaffsForShift(day.key, 'ca2');
-                    let ca3List = this.getStaffsForShift(day.key, 'ca3');
-                    daysHtml += `<h3>${day.name} (${dateStr})</h3><table><tr style="background:#f2f2f2;"><td style="text-align:center;font-weight:bold;">Ca</td><td style="font-weight:bold;">Nhân sự</td><td>Ghi chú</td></tr><tr><td style="text-align:center;font-weight:bold;">1</td><td>${ca1List.map((n,i)=>`${i+1}. ${n}`).join('<br>')||'<em>Trống</em>'}</td><td></td></tr><tr><td style="text-align:center;font-weight:bold;">2</td><td>${ca2List.map((n,i)=>`${i+1}. ${n}`).join('<br>')||'<em>Trống</em>'}</td><td><span style="color:red;">Trực trưa: ${ca2List.slice(0,2).join(', ')}</span><br><br><span style="color:red;">Trực tối: ${ca3List.slice(0,2).join(', ')}</span></td></tr><tr><td style="text-align:center;font-weight:bold;">3</td><td>${ca3List.map((n,i)=>`${i+1}. ${n}`).join('<br>')||'<em>Trống</em>'}</td><td></td></tr></table><br>`;
-                });
-                let htmlContent = `<html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'><head><meta charset='utf-8'><style>body{font-family:'Times New Roman';font-size:14pt;}table{border-collapse:collapse;width:100%;}th,td{border:1px solid black;padding:6px;vertical-align:top;}</style></head><body><h2 style="text-align:center;">BÁO CÁO LỊCH TRỰC TUẦN (${weekStr})</h2><hr>${daysHtml}</body></html>`;
-                let blob = new Blob(['\ufeff' + htmlContent], { type: 'application/msword' });
-                let a = document.createElement('a');
-                a.href = URL.createObjectURL(blob);
-                a.download = `BaoCao_Tuan_${this.currentWeekKey}.doc`;
-                a.click();
-                this.triggerToast('Đã tải xuống Word cả tuần!');
             }
         }
-    }
 
-    window.getDefaultWeekSchedule = function(checked = false) {
-        let sched = {};
-        ['t2', 't3', 't4', 't5', 't6', 't7', 'cn'].forEach(d => {
-            sched[d] = { ca1: checked, ca2: checked, ca3: checked };
-        });
-        return sched;
-    }
+        window.getDefaultWeekSchedule = function(checked = false) {
+            let sched = {};
+            ['t2', 't3', 't4', 't5', 't6', 't7', 'cn'].forEach(d => {
+                sched[d] = { ca1: checked, ca2: checked, ca3: checked };
+            });
+            return sched;
+        }
     </script>
 </body>
 </html>
